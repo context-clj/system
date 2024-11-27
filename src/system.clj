@@ -139,6 +139,15 @@
         (println :stop stop-fn)
         (println :> (stop-fn ctx (get system (keyword (name sv)))))))))
 
+(defn info [context event & [message opts]]
+  (println event message opts))
+
+(defn error [context event & [message opts]]
+  (println event message opts))
+
+(defn debug [context event & [message opts]]
+  (println event message opts))
+
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
 ;; TODO: rename service into module - more generic
