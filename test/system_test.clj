@@ -4,52 +4,45 @@
             [system]))
 
 (system/defmanifest
-  {:config {:param {:required true :type "string"}}})
+  {:config {:param {:required true :type "string"}}
+   :hooks {:define {}
+           :subscribe {}}
+   :events {:define {}
+            :subscribe {}}})
 
-(defn start [ctx config]
-  (println :start config)
-  {:service {:name "svs"}})
+(system/defstart
+  [context config]
+  (system/info context ::start)
+  {:state :v1})
 
-(defn stop [ctx]
-  (println :stop))
-
-(deftest basic-test
-
-  (def sys (system/new-system {}))
-
-  sys
-
-  (system/set-system-state sys [:var] 1)
-
-  (matcho/match (system/get-system-state sys [:var]) 1)
-
-  (system/clear-system-state sys [:var])
-
-  (is (nil? (system/get-system-state sys [:var])))
-
-  ;; should fail
-  (def sys1
-    (system/start-system {:services ["system-test"]
-                          :system-test {:param 1}}))
-
-  (system/stop-system sys1)
-
+(system/defstop
+  [context state]
+  (system/info context ::stop)
 
   )
 
 
-(comment
+(deftest basic-test
+  (def context (system/start-system
+                {:services ["system-test"]
+                 :system-test {:param "param"}}))
 
-  (s/explain-str ::manifest {:config {:param {:type "string"}}})
+  context
 
-  (s/explain-data ::manifest )
+  (testing "system state after start"
+    (matcho/match (system/get-system-state context [:state]) :v1))
 
-  (system/defmanifest
-    {:config {:param {:required true :type "string"}}}
-    )
+  (testing "set-system-state"
+    (system/set-system-state context [:state] :v2)
+    (matcho/match (system/get-system-state context [:state]) :v2))
 
-  (system/defmanifest
-    {:config {:ups {:required 1 :type "ups"}}}
-    )
+
+  (system/clear-system-state context [:state])
+  (matcho/match (system/get-system-state context [:state]) nil?)
+
+  (is (thrown-with-msg?
+       Exception #"Invalid config"
+       (system/start-system {:services ["system-test"] :system-test {:param 1}})))
+
 
   )

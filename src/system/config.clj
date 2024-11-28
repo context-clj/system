@@ -56,7 +56,6 @@
        (reduce (fn [acc [k {req :required}]]
                  (if req (conj acc k) acc)) [])
        (reduce (fn [acc k]
-                 (println :? k (contains? config k))
                  (if-not (contains? config k)
                    (conj acc {:message (str (name k) " is required")})
                    acc)) errors)))

@@ -1,7 +1,17 @@
 (ns system
   (:require [system.config]
+            [clojure.string :as str]
             [clojure.spec.alpha :as s]))
 ;; TODO: rewrite start with context
+
+(defn info [context event & [message opts]]
+  (println event (or message "") (or opts "")))
+
+(defn error [context event & [message opts]]
+  (println event (or message "") (or opts "")))
+
+(defn debug [context event & [message opts]]
+  (println event (or message "") (or opts "")))
 
 (s/def ::config :system.config/config-spec)
 (s/def ::descripton string?)
@@ -118,18 +128,43 @@
   (let [key (keyword (.getName *ns*))]
     `(-register-config ~ctx ~key ~config)))
 
+(defn read-manifests [context {services :services :as config}]
+  (doseq [svs services]
+    (require (symbol svs))
+    (info context ::load svs)
+    (when-let [manifest (resolve (symbol (name svs) "manifest"))]
+      (let [manifest (var-get manifest)]
+        (info context ::manifest svs)
+        (set-system-state context [:manifests (keyword svs)] manifest)
+        (when-let [schema (get-in manifest [:config])]
+          (info context ::validate svs)
+          (let [module-key     (keyword svs)
+                module-config  (get config module-key)
+                coerced-config (system.config/coerce schema module-config)
+                errors         (system.config/validate schema coerced-config)]
+            (if (seq errors)
+              (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
+                  (set-system-state context [:errors module-key] errors))
+              (do (info context ::valid-config svs)
+                  (set-system-state context [:configs :module-key] coerced-config)))))))))
 
-(defn start-system [{services :services :as config}]
-  (let [system (new-system {})]
-    (doseq [svs services]
-      (require (symbol svs))
-      (when-let [manifest (resolve (symbol (name svs) "manifest"))]
-        (println :register-module svs (var-get manifest))))
-    (doseq [svs services]
-      (when-let [start-fn (resolve (symbol (name svs) "start"))]
-        (start-fn system (get config (keyword svs) {}))))
+(defn start-services [context {services :services :as config}]
+  (doseq [svs services]
+    (when-let [start-fn (resolve (symbol (name svs) "start"))]
+      (let [module-config (get-system-state context [:configs (keyword svs)])]
+        (start-fn context module-config)))))
 
-    system))
+(defn start-system
+  "config {:services [\"svs1\", \"svs2\"] :svs1 {} :svs2 {}}"
+  [{_services :services :as config}]
+  (let [context (new-system {})]
+    (read-manifests context config)
+    (let [errors (get-system-state context [:errors])]
+      (when (seq errors)
+        (error context ::config-error (str "Can't start, invalid configs: " (pr-str errors)))
+        (throw (Exception. "Invalid config"))))
+    (start-services context config)
+    context))
 
 (defn stop-system [ctx]
   (let [system @(:system ctx)]
@@ -139,15 +174,6 @@
         (println :stop stop-fn)
         (println :> (stop-fn ctx (get system (keyword (name sv)))))))))
 
-(defn info [context event & [message opts]]
-  (println event message opts))
-
-(defn error [context event & [message opts]]
-  (println event message opts))
-
-(defn debug [context event & [message opts]]
-  (println event message opts))
-
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
 ;; TODO: rename service into module - more generic
@@ -155,40 +181,3 @@
 ;; on module registration it register all config params
 ;; this params are used to validate before start
 
-(comment
-  (require ['pg])
-  (require ['ups])
-
-  (def system (new-system {}))
-  system
-
-  (set-system-state system [:connection] :ok)
-  (get-system-state system [])
-
-  (def ctx (new-context system))
-
-  (set-system-state ctx [] {:a 1})
-
-  (set-system-state ctx [:uri] "uri")
-  (get-system-state ctx [:uri])
-  (get-system-state ctx [:a])
-
-  (clear-system-state ctx [:uri])
-  (clear-system-state ctx [])
-
-  ctx
-
-  (start-service system (println :ok))
-
-  (stop-system system)
-
-  (def pg-system
-    (start-system
-     {:services ["pg"]
-      :pg (cheshire.core/parse-string (slurp "connection.json") keyword)}))
-
-  (stop-system pg-system)
-
-  (pg/execute! pg-system ["select 1"])
-
-  )
