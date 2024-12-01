@@ -50,7 +50,10 @@
 
   (is (thrown-with-msg?
        Exception #"Invalid config"
-       (system/start-system {:services ["system-test"] :system-test {:param 1}}))))
+       (system/start-system {:services ["system-test"] :system-test {:param 1}})))
+
+  (system/stop-system context)
+  )
 
 (defn process-middlewares [context request]
   (let [context (system/reduce-hooks-into-context context ::middleware request)]
@@ -137,6 +140,7 @@
 
     (matcho/match (get-user ctx')   {:id "admin"})
     (matcho/match (get-client ctx') {:id "client"})
+
 
     )
 

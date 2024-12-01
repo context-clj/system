@@ -219,13 +219,11 @@
     (doseq [sv (:services system)]
       (require [sv])
       (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
-        (println :stop stop-fn)
-        (println :> (stop-fn ctx (get system (keyword (name sv)))))))))
+        (info ctx :stoping sv)
+        (stop-fn ctx (get system (keyword (name sv))))
+        (info ctx :stopped sv)))))
 
 
-(defn call-hook [context hook-name & params]
-
-  )
 
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
