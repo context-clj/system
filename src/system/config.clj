@@ -115,5 +115,10 @@
   (coerce sch {:port "5432" :pool-size "-1" :host 4 :timeout 10})
   (validate sch {:port "5432" :pool-size -1 :host 4 :timeout 10})
 
+  (validate sch {:port 5432 :pool-size 10
+                 :host "localhost"
+                 :password "pwd"
+                 :timeout 1000 :database "db"})
+
   )
 

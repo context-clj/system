@@ -22,8 +22,8 @@
 
 (system/defstart
   [context config]
-  (system/info context ::start)
-  {:state :v1})
+  (system/info context ::start config)
+  {:state :v1 :config config})
 
 (system/defstop
   [context state]
@@ -33,6 +33,10 @@
   (def context (system/start-system
                 {:services ["system-test"]
                  :system-test {:param "param"}}))
+
+  (matcho/match
+   (system/get-system-state context [:config])
+   {:param "param"})
 
   (testing "system state after start"
     (matcho/match (system/get-system-state context [:state]) :v1))

@@ -166,7 +166,7 @@
         (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
             (set-system-state context [:errors module-key] errors))
         (do (info context ::valid-config svs)
-            (set-system-state context [:configs :module-key] coerced-config))))))
+            (set-system-state context [:configs module-key] coerced-config))))))
 
 (defn register-slot [context slot-name slot]
   (debug context ::register-slot (str slot-name " <- " slot))
