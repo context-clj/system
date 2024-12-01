@@ -106,20 +106,42 @@
     `(defn ~fn-name ~params
        (stop-service ~(first params) ~@body))))
 
-(defn ctx-get [ctx & path]
+(defn ctx-get [ctx path]
   (get-in ctx path))
 
+(defn ctx-set [ctx path value]
+  (assoc-in ctx path value))
 
 (defn manifest-hook [ctx hook-name opts]
   (update-system-state ctx [:manifested-hooks hook-name] opts))
 
-(defn register-hook [ctx hook-name hook-handler & [opts]]
-  ;; TODO: check hooks availability
-  (update-system-state ctx [:hooks hook-name] (fn [x] (assoc (or x {}) hook-handler (or opts {})))))
+(defn register-hook [context hook-name hook-id hook]
+  (assert hook-id)
+  (info context ::register-hook (str hook-name " <- " hook-id))
+  (set-system-state context [:registered-hooks hook-name hook-id] hook))
 
-(defn get-hooks [ctx hook-name]
-  (->> (get-system-state ctx [:hooks hook-name])
-       (mapv (fn [[h opts]] (assoc opts :fn h)))))
+(defn get-hooks [context hook-name]
+  (get-system-state context [:registered-hooks hook-name]))
+
+(defn reduce-hooks [context hook-name acc f]
+  (->> (get-hooks context hook-name)
+       (reduce (fn [acc [k v]] (f acc k v)) acc)))
+
+(defn reduce-hooks-into-vector
+  [context hook-name & params]
+  (reduce-hooks
+   context hook-name []
+   (fn [acc id {f :fn :as hook}]
+     (system/debug context hook-name (str "with " id))
+     (into acc (apply f context params)))))
+
+(defn reduce-hooks-into-context
+  [context hook-name & params]
+  (reduce-hooks
+   context hook-name context
+   (fn [context id {f :fn :as hook}]
+     (system/debug context hook-name (str "with " id))
+     (apply f context params))))
 
 (defn -register-config [ctx service-name config]
   (update-system-state ctx [:config service-name] config))
@@ -127,6 +149,40 @@
 (defmacro register-config [ctx config]
   (let [key (keyword (.getName *ns*))]
     `(-register-config ~ctx ~key ~config)))
+
+(defn register-hooks-from-manifest [context manifest]
+  (doseq [[hook-name hooks] (:register-hook manifest)]
+    (doseq [[hook-id hook] hooks]
+      (register-hook context hook-name hook-id hook))))
+
+(defn configs-from-manifest [context manifest svs config]
+  (when-let [schema (get-in manifest [:config])]
+    (info context ::validate svs)
+    (let [module-key     (keyword svs)
+          module-config  (get config module-key)
+          coerced-config (system.config/coerce schema module-config)
+          errors         (system.config/validate schema coerced-config)]
+      (if (seq errors)
+        (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
+            (set-system-state context [:errors module-key] errors))
+        (do (info context ::valid-config svs)
+            (set-system-state context [:configs :module-key] coerced-config))))))
+
+(defn register-slot [context slot-name slot]
+  (debug context ::register-slot (str slot-name " <- " slot))
+  (set-system-state context [:registered-slot slot-name] slot))
+
+(defn register-slots-from-manifest [context manifest]
+  (doseq [[slot-name slot] (:register-slot manifest)]
+    (register-slot context slot-name slot)))
+
+(defn call-slot [context slot-name & params]
+  (if-let [slot (get-system-state context [:registered-slot slot-name])]
+    (apply (:fn slot) context params)
+    (throw (Exception. (str "No slot registered for " slot-name)))))
+
+(defn get-hooks [context hook-name]
+  (get-system-state context [:registered-hooks hook-name]))
 
 (defn read-manifests [context {services :services :as config}]
   (doseq [svs services]
@@ -136,17 +192,9 @@
       (let [manifest (var-get manifest)]
         (info context ::manifest svs)
         (set-system-state context [:manifests (keyword svs)] manifest)
-        (when-let [schema (get-in manifest [:config])]
-          (info context ::validate svs)
-          (let [module-key     (keyword svs)
-                module-config  (get config module-key)
-                coerced-config (system.config/coerce schema module-config)
-                errors         (system.config/validate schema coerced-config)]
-            (if (seq errors)
-              (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
-                  (set-system-state context [:errors module-key] errors))
-              (do (info context ::valid-config svs)
-                  (set-system-state context [:configs :module-key] coerced-config)))))))))
+        (register-hooks-from-manifest context manifest)
+        (register-slots-from-manifest context manifest)
+        (configs-from-manifest context manifest svs config)))))
 
 (defn start-services [context {services :services :as config}]
   (doseq [svs services]
@@ -173,6 +221,11 @@
       (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
         (println :stop stop-fn)
         (println :> (stop-fn ctx (get system (keyword (name sv)))))))))
+
+
+(defn call-hook [context hook-name & params]
+
+  )
 
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
