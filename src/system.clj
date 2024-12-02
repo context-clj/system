@@ -22,7 +22,7 @@
     (throw (ex-info "Invalid manifest" (s/explain-data ::manifest manifest))))
   (list 'def 'manifest manifest))
 
-(defn new-system [ & [config]]
+(defn- new-system [ & [config]]
   {:system (atom {:system/config (or config {})})})
 
 (defn new-context [ctx & [params]]
@@ -188,13 +188,14 @@
   (doseq [svs services]
     (require (symbol svs))
     (info context ::load svs)
-    (when-let [manifest (resolve (symbol (name svs) "manifest"))]
+    (if-let [manifest (resolve (symbol (name svs) "manifest"))]
       (let [manifest (var-get manifest)]
         (info context ::manifest svs)
         (set-system-state context [:manifests (keyword svs)] manifest)
         (register-hooks-from-manifest context manifest)
         (register-slots-from-manifest context manifest)
-        (configs-from-manifest context manifest svs config)))))
+        (configs-from-manifest context manifest svs config))
+      (throw (Exception. (str "No module " svs))))))
 
 (defn start-services [context {services :services :as config}]
   (doseq [svs services]
@@ -224,11 +225,11 @@
         (info ctx :stopped sv)))))
 
 
-
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
 ;; TODO: rename service into module - more generic
 ;; TODO: make register module using manifest
+;; TODO: open telemetry out of the box
 ;; on module registration it register all config params
 ;; this params are used to validate before start
 
