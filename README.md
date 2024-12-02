@@ -10,6 +10,7 @@ Statefull modules can declare `defstop/defstart` functions.
 But module is not forced to be stateful.
 
 Basic module may look like:
+
 ```clj
 (ns mymodule
   (:require [system]))
