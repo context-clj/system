@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.spec.alpha :as s]))
 
-(s/def ::type #{"string" "string[]" "integer" "number" "keyword"})
+(s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean"})
 (s/def ::default any?)
 (s/def ::required boolean?)
 (s/def ::sensitive boolean?)
@@ -27,15 +27,34 @@
   (parse-int "-1")
   )
 
+(defn coerce-vector-of-strings [v]
+  (if-not (string? v)
+    v
+    (->> (str/split v #",")
+         (mapv str/trim)
+         (remove str/blank?))))
+
+(defn coerce-boolean [v]
+  (cond (boolean? v) v
+        (= "true" v) true
+        (= "false" v) false
+        :else v))
+
 (def coercers
   {"integer" parse-int
    "keyword" keyword
-   "string[]" (fn [v]
-                (if-not (string? v)
-                  v
-                  (->> (str/split v #",")
-                       (mapv str/trim)
-                       (remove str/blank?))))})
+   "boolean" coerce-boolean
+   "string[]"  coerce-vector-of-strings})
+
+(defn vector-of-strings? [v]
+  (and (vector? v) (every? string? v)))
+
+(def type-validators
+  {"string" string?
+   "string[]" vector-of-strings?
+   "number" number?
+   "boolean" boolean?
+   "integer" int?})
 
 (defn coerce-value [k v tp]
   (if-let [coercer (get coercers tp)]
@@ -60,19 +79,11 @@
                    (conj acc {:message (str (name k) " is required")})
                    acc)) errors)))
 
-(defn vector-of-strings? [v]
-  (and (vector? v) (every? string? v)))
-
-(def type-validators
-  {"string" string?
-   "string[]" vector-of-strings?
-   "number" number?
-   "integer" int?})
 
 (defn validate-type [errors type k v]
   (if-let [vld (get type-validators type)]
     (if-not (vld v)
-      (conj errors {:message (str (name k) "- expected " v " of type " type)})
+      (conj errors {:message (str (name k) " - expected " v " of type " type " got " (clojure.core/type v))})
       errors)
     (conj errors {:message (str (name k) " - unknown type " type ". Should be one of " (str/join ", " (keys type-validators)))})))
 
@@ -104,6 +115,7 @@
   (def sch  {:port      {:type "integer" :default 5432 :validator #'pos-int?}
              :host      {:type "string" :required true}
              :database  {:type "string" :required true}
+             :enable    {:type "boolean"}
              :password  {:type "string" :sensitive true :required true}
              :pool-size {:type "integer" :default 5 :validator #'pos-int? :required 1}
              :timeout   {:type "integer" :validator #'pos-int?}})
@@ -112,8 +124,11 @@
   (s/valid? ::config-spec sch)
   (s/explain-data ::config-spec sch)
 
-  (coerce sch {:port "5432" :pool-size "-1" :host 4 :timeout 10})
-  (validate sch {:port "5432" :pool-size -1 :host 4 :timeout 10})
+  (coerce sch {:port "5432" :pool-size "-1" :host 4 :timeout 10 :enable "true"})
+  (coerce sch {:port "5432" :pool-size "-1" :host 4 :timeout 10 :enable true})
+
+
+  (validate sch {:port "5432" :pool-size -1 :host 4 :timeout 10 :boolean 1})
 
   (validate sch {:port 5432 :pool-size 10
                  :host "localhost"

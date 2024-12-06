@@ -19,6 +19,16 @@
    :events {:define {}
             :subscribe {}}})
 
+(system/defhook authorize
+  {:description "authorization framework"}
+  [context param hooks]
+
+  )
+
+(comment
+  (authorize context {})
+
+  )
 
 (system/defstart
   [context config]

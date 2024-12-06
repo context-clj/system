@@ -79,6 +79,12 @@
 (defmacro get-system-state [ctx path & [default]]
   `(-get-system-state (:system ~ctx) ~(keyword (.getName *ns*)) ~path ~default))
 
+(defn -get-config [system module-key config-key default]
+  (get-in @system [:system :configs module-key config-key] default))
+
+(defmacro get-config [ctx config-key & [default]]
+  `(-get-config (:system ~ctx) ~(keyword (.getName *ns*)) ~config-key ~default))
+
 (defmacro start-service [ctx & body]
   (let [key (.getName *ns*)]
     `(when-not (contains? (:services @(:system ~ctx)) '~key)
@@ -223,6 +229,27 @@
         (info ctx :stoping sv)
         (stop-fn ctx (get system (keyword (name sv))))
         (info ctx :stopped sv)))))
+
+
+;; helper macro for tests
+(defmacro ensure-context [cfg]
+  `(do
+     (defonce ~'context-atom (atom nil))
+     (defn ~'reload-context []
+       (system/stop-system ~'context)
+       (reset! ~'context-atom nil))
+     (defn ~'ensure-context []
+       (when-not @~'context-atom
+         (def ~'context (system/start-system ~cfg))
+         (reset! ~'context-atom ~'context)))))
+
+(def cfg {:host "localhost" :port  5401 :database "context_pg" :user "admin" :password "admin"})
+
+
+(comment
+
+
+  )
 
 
 ;; TODO: think about name convention like module-<module-name>.clj
