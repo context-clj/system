@@ -19,11 +19,8 @@
    :events {:define {}
             :subscribe {}}})
 
-(system/defhook authorize
-  {:description "authorization framework"}
-  [context param hooks]
 
-  )
+
 
 (comment
   (authorize context {})
@@ -63,6 +60,17 @@
        (system/start-system {:services ["system-test"] :system-test {:param 1}})))
 
   (system/stop-system context)
+
+
+  (def ctx-with-cache (system/new-context context))
+  (def num-cache-calls (atom 0))
+
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+
+  (matcho/match @num-cache-calls 1)
+
   )
 
 (defn process-middlewares [context request]
