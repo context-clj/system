@@ -261,6 +261,7 @@
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
   `(do
+     (defonce ~'context nil)
      (defonce ~'context-atom (atom nil))
      (defn ~'reload-context []
        (system/stop-system ~'context)
