@@ -27,13 +27,15 @@
   (println :debug event (or message "") (or opts "")))
 
 (s/def ::config :system.config/config-spec)
-(s/def ::descripton string?)
+(s/def ::description string?)
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
 
 (defmacro defmanifest [manifest]
-  (when-not (s/valid? ::manifest manifest)
-    (throw (ex-info "Invalid manifest" (s/explain-data ::manifest manifest))))
-  (list 'def 'manifest manifest))
+  `(let [result# (s/conform ~::manifest ~manifest)]
+     (if (= :clojure.spec.alpha/invalid result#)
+       (throw (ex-info "Invalid manifest"
+                       (s/explain-data ~::manifest ~manifest)))
+       (def ~(symbol "manifest") result#))))
 
 (defn- new-system [ & [config]]
   {:system (atom {:system/config (or config {})})
