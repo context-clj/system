@@ -4,14 +4,27 @@
             [clojure.spec.alpha :as s]))
 ;; TODO: rewrite start with context
 
+
+(def log-levels {:error 0 :info 1 :debug 2})
+(def log-levels-inv (reduce (fn [acc [k v]] (assoc acc v k)) {} log-levels))
+
+(defn ctx-set-log-level [context level]
+  (assert (contains? log-levels level))
+  (assoc context ::log-level (get log-levels level)))
+
+(defn ctx-get-log-level [context]
+  (get log-levels-inv (get context ::log-level 1)))
+
 (defn info [context event & [message opts]]
-  (println event (or message "") (or opts "")))
+  (let [lvl (::log-level context)]
+    (when (or (nil? lvl) (>= lvl 1))
+      (println :info event (or message "") (or opts "")))))
 
 (defn error [context event & [message opts]]
-  (println event (or message "") (or opts "")))
+  (println :error event (or message "") (or opts "")))
 
 (defn debug [context event & [message opts]]
-  (println event (or message "") (or opts "")))
+  (println :debug event (or message "") (or opts "")))
 
 (s/def ::config :system.config/config-spec)
 (s/def ::description string?)
@@ -25,10 +38,11 @@
        (def ~(symbol "manifest") result#))))
 
 (defn- new-system [ & [config]]
-  {:system (atom {:system/config (or config {})})})
+  {:system (atom {:system/config (or config {})})
+   :cache (atom {})})
 
 (defn new-context [ctx & [params]]
-  (merge (or params {}) {:system (:system ctx)}))
+  (merge (or params {}) {:system (:system ctx) :cache (atom {})}))
 
 (defn -set-state [system key value]
   (swap! system assoc key value))
@@ -80,6 +94,19 @@
 
 (defmacro get-system-state [ctx path & [default]]
   `(-get-system-state (:system ~ctx) ~(keyword (.getName *ns*)) ~path ~default))
+
+
+(defn -get-context-cache [{cache :cache :as ctx} key path update-fn]
+  (let [v-path (into [key] path)]
+    (if-let [v (get-in @cache v-path)]
+      v
+      (when-let [v (update-fn)]
+        (swap! cache assoc-in v-path v)
+        v))))
+
+(defmacro get-context-cache [ctx path update-fn]
+  `(-get-context-cache ~ctx ~(keyword (.getName *ns*)) ~path ~update-fn))
+
 
 (defn -get-config [system module-key config-key default]
   (get-in @system [:system :configs module-key config-key] default))
@@ -236,6 +263,7 @@
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
   `(do
+     (defonce ~'context nil)
      (defonce ~'context-atom (atom nil))
      (defn ~'reload-context []
        (system/stop-system ~'context)
@@ -253,7 +281,7 @@
 
   )
 
-
+;; TODO: add context cache set-context-cache, update-context-cache, get-context-cache and clear-context-cache
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
 ;; TODO: rename service into module - more generic
