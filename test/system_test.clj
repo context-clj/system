@@ -21,7 +21,6 @@
 
 
 
-
 (comment
   (authorize context {})
 
@@ -163,3 +162,30 @@
     )
 
   )
+
+(deftest test-defmanifest
+  (testing "when validator is an atom"
+    (is (macroexpand '(system/defmanifest
+                        {:config {:port {:type "integer"
+                                         :validator pos-int?}}}))
+        "Unexpected error during macro expansion"))
+  (testing "when validator is a list"
+    (is (macroexpand '(system/defmanifest
+                        {:config {:filepath {:type "string"
+                                             :validator (complement empty?)}}}))
+        "Unexpected error during macro expansion")
+    (is (macroexpand '(system/defmanifest
+                        {:config {:url {:type "string"
+                                        :validator #(clojure.string/starts-with? % "http")}}}))
+        "Unexpected error during macro expansion"))
+  (testing "when manifest doesn't conform to the schema"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid manifest"
+         (system/defmanifest {:description 123}))
+        "Non-conforming description must throw")
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid manifest"
+         (system/defmanifest {:config "invalid"}))
+        "Non-conforming config must throw")))
