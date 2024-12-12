@@ -105,6 +105,12 @@
 (defmacro get-context-cache [ctx path update-fn]
   `(-get-context-cache ~ctx ~(keyword (.getName *ns*)) ~path ~update-fn))
 
+(defn -clear-context-cache [{cache :cache :as ctx} key path]
+  (let [v-path (into [key] path)]
+    (swap! cache assoc-in v-path nil)))
+
+(defmacro clear-context-cache [ctx path]
+  `(-clear-context-cache ~ctx ~(keyword (.getName *ns*)) ~path))
 
 (defn -get-config [system module-key config-key default]
   (get-in @system [:system :configs module-key config-key] default))
