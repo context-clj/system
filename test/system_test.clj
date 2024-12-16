@@ -188,4 +188,21 @@
          clojure.lang.ExceptionInfo
          #"Invalid manifest"
          (system/defmanifest {:config "invalid"}))
-        "Non-conforming config must throw")))
+        "Non-conforming config must throw"))
+  
+  (testing "field config validation"
+    (is (system/defmanifest {:config {:port {:type "integer"}}})
+        "Unexpected error when validating config")
+    (is (system/defmanifest {:config {:data {:type "map"}}})
+        "Unexpected error when validating config"))
+  
+  (testing "field value validation"
+    (system/defmanifest {:config {:port {:type "integer"}}})
+    (is (system/start-system {:services [:system-test]
+                              :system-test {:port 1234}})
+        "Unexpected error when validating port value")
+    
+    (system/defmanifest {:config {:data {:type "map"}}})
+    (is (system/start-system {:services [:system-test]
+                              :system-test {:data {:a 1 :b "c"}}})
+        "Unexpected error when validating data value")))
