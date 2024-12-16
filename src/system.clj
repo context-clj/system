@@ -273,11 +273,14 @@
      (defonce ~'context-atom (atom nil))
      (defn ~'reload-context []
        (system/stop-system ~'context)
-       (reset! ~'context-atom nil))
+       (reset! ~'context-atom nil)
+       (def ~'context (system/start-system ~cfg))
+       (reset! ~'context-atom ~'context))
      (defn ~'ensure-context []
        (when-not @~'context-atom
          (def ~'context (system/start-system ~cfg))
-         (reset! ~'context-atom ~'context)))))
+         (reset! ~'context-atom ~'context)
+         ))))
 
 (def cfg {:host "localhost" :port  5401 :database "context_pg" :user "admin" :password "admin"})
 
