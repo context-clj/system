@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.spec.alpha :as s]))
 
-(s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean"})
+(s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean" "map"})
 (s/def ::default any?)
 (s/def ::required boolean?)
 (s/def ::sensitive boolean?)
@@ -54,7 +54,8 @@
    "string[]" vector-of-strings?
    "number" number?
    "boolean" boolean?
-   "integer" int?})
+   "integer" int?
+   "map" map?})
 
 (defn coerce-value [k v tp]
   (if-let [coercer (get coercers tp)]

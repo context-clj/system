@@ -190,19 +190,33 @@
          (system/defmanifest {:config "invalid"}))
         "Non-conforming config must throw"))
   
-  (testing "field config validation"
-    (is (system/defmanifest {:config {:port {:type "integer"}}})
-        "Unexpected error when validating config")
-    (is (system/defmanifest {:config {:data {:type "map"}}})
-        "Unexpected error when validating config"))
-  
-  (testing "field value validation"
+  (testing "type validation"
+    (doseq [type ["integer" "number" "keyword" "string" "string[]" "boolean" "map"]]
+      (is (system/defmanifest {:config {:my-field {:type type}}})
+          "Unexpected error when validating type"))
+
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid manifest"
+         (system/defmanifest {:config {:field-of-unsupported-type {:type "foobar"}}}))
+        "Unsupported field type must throw")))
+
+(deftest test-start-system
+  (testing "config value validation"
+    (system/defmanifest {:config {:number-field {:type "number"}}})
+    (is (thrown-with-msg?
+         Exception
+         #"Invalid config"
+         (system/start-system {:services [:system-test]
+                               :system-test {:number-field "not a number"}}))
+        "A field value of wrong type must throw")
+
     (system/defmanifest {:config {:port {:type "integer"}}})
     (is (system/start-system {:services [:system-test]
                               :system-test {:port 1234}})
-        "Unexpected error when validating port value")
+        "Unexpected error when validating port")
     
     (system/defmanifest {:config {:data {:type "map"}}})
     (is (system/start-system {:services [:system-test]
                               :system-test {:data {:a 1 :b "c"}}})
-        "Unexpected error when validating data value")))
+        "Unexpected error when validating data")))
