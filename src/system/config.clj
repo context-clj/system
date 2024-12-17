@@ -1,6 +1,7 @@
 (ns system.config
   (:require [clojure.string :as str]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [cheshire.core :as json]))
 
 (s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean" "map"})
 (s/def ::default any?)
@@ -44,7 +45,8 @@
   {"integer" parse-int
    "keyword" keyword
    "boolean" coerce-boolean
-   "string[]"  coerce-vector-of-strings})
+   "string[]" coerce-vector-of-strings
+   "map" #(json/parse-string % keyword)})
 
 (defn vector-of-strings? [v]
   (and (vector? v) (every? string? v)))

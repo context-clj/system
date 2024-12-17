@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest testing is]]
             [matcho.core :as matcho]
             [clojure.spec.alpha :as s]
-            [system]))
+            [system]
+            [system.config :as config]))
 
 (s/def ::resourceType string?)
 (s/def ::resource-map (s/keys :req-un [::resourceType]))
@@ -220,3 +221,18 @@
     (is (system/start-system {:services [:system-test]
                               :system-test {:data {:a 1 :b "c"}}})
         "Unexpected error when validating data")))
+
+(deftest test-coerce
+  (is (= {:port 123}
+         (config/coerce {:port {:type "integer"}} {:port "123"})))
+  (is (= {:ip "0.0.0.0"}
+         (config/coerce {:ip {:type "string"}} {:ip "0.0.0.0"})))
+  (is (= {:foobar :baz}
+         (config/coerce {:foobar {:type "keyword"}} {:foobar "baz"})))
+  (is (= {:flag true}
+         (config/coerce {:flag {:type "boolean"}} {:flag "true"})))
+  (is (= {:arr ["foo" "bar" "baz"]}
+         (config/coerce {:arr {:type "string[]"}} {:arr "foo, bar, baz"})))
+  (is (= {:conf {:foo true :bar "baz" :qux 123}}
+         (config/coerce {:conf {:type "map"}}
+                        {:conf "{\"foo\":true, \"bar\":\"baz\", \"qux\":123}"}))))
