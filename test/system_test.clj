@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest testing is]]
             [matcho.core :as matcho]
             [clojure.spec.alpha :as s]
-            [system]))
+            [system]
+            [system.config :as config]))
 
 (s/def ::resourceType string?)
 (s/def ::resource-map (s/keys :req-un [::resourceType]))
@@ -188,4 +189,50 @@
          clojure.lang.ExceptionInfo
          #"Invalid manifest"
          (system/defmanifest {:config "invalid"}))
-        "Non-conforming config must throw")))
+        "Non-conforming config must throw"))
+  
+  (testing "type validation"
+    (doseq [type ["integer" "number" "keyword" "string" "string[]" "boolean" "map"]]
+      (is (system/defmanifest {:config {:my-field {:type type}}})
+          "Unexpected error when validating type"))
+
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid manifest"
+         (system/defmanifest {:config {:field-of-unsupported-type {:type "foobar"}}}))
+        "Unsupported field type must throw")))
+
+(deftest test-start-system
+  (testing "config value validation"
+    (system/defmanifest {:config {:number-field {:type "number"}}})
+    (is (thrown-with-msg?
+         Exception
+         #"Invalid config"
+         (system/start-system {:services [:system-test]
+                               :system-test {:number-field "not a number"}}))
+        "A field value of wrong type must throw")
+
+    (system/defmanifest {:config {:port {:type "integer"}}})
+    (is (system/start-system {:services [:system-test]
+                              :system-test {:port 1234}})
+        "Unexpected error when validating port")
+    
+    (system/defmanifest {:config {:data {:type "map"}}})
+    (is (system/start-system {:services [:system-test]
+                              :system-test {:data {:a 1 :b "c"}}})
+        "Unexpected error when validating data")))
+
+(deftest test-coerce
+  (is (= {:port 123}
+         (config/coerce {:port {:type "integer"}} {:port "123"})))
+  (is (= {:ip "0.0.0.0"}
+         (config/coerce {:ip {:type "string"}} {:ip "0.0.0.0"})))
+  (is (= {:foobar :baz}
+         (config/coerce {:foobar {:type "keyword"}} {:foobar "baz"})))
+  (is (= {:flag true}
+         (config/coerce {:flag {:type "boolean"}} {:flag "true"})))
+  (is (= {:arr ["foo" "bar" "baz"]}
+         (config/coerce {:arr {:type "string[]"}} {:arr "foo, bar, baz"})))
+  (is (= {:conf {:foo true :bar "baz" :qux 123}}
+         (config/coerce {:conf {:type "map"}}
+                        {:conf "{\"foo\":true, \"bar\":\"baz\", \"qux\":123}"}))))
