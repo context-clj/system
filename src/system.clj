@@ -5,26 +5,33 @@
 ;; TODO: rewrite start with context
 
 
-(def log-levels {:error 0 :info 1 :debug 2})
-(def log-levels-inv (reduce (fn [acc [k v]] (assoc acc v k)) {} log-levels))
+(def ^:const log-levels {:error 0 :info 1 :debug 2})
+(def ^:const log-levels-inv (reduce (fn [acc [k v]] (assoc acc v k)) {} log-levels))
 
 (defn ctx-set-log-level [context level]
   (assert (contains? log-levels level))
   (assoc context ::log-level (get log-levels level)))
 
-(defn ctx-get-log-level [context]
-  (get log-levels-inv (get context ::log-level 1)))
+(defn- ctx-get-log-level-n [context]
+  (or (-> context ::log-level)
+      (some-> context :system deref :system/config :system/log-level)
+      1))
 
-(defn info [context event & [message opts]]
-  (let [lvl (::log-level context)]
-    (when (or (nil? lvl) (>= lvl 1))
-      (println :info event (or message "") (or opts "")))))
+(defn ctx-get-log-level [context]
+  (log-levels-inv (ctx-get-log-level-n context)))
 
 (defn error [context event & [message opts]]
   (println :error event (or message "") (or opts "")))
 
+(defn info [context event & [message opts]]
+  (let [lvl (ctx-get-log-level-n context)]
+    (when (or (nil? lvl) (>= lvl (log-levels :info)))
+      (println :info event (or message "") (or opts "")))))
+
 (defn debug [context event & [message opts]]
-  (println :debug event (or message "") (or opts "")))
+  (let [lvl (ctx-get-log-level-n context)]
+    (when (or (nil? lvl) (>= lvl (log-levels :debug)))
+      (println :debug event (or message "") (or opts "")))))
 
 (s/def ::config :system.config/config-spec)
 (s/def ::description string?)
@@ -248,7 +255,7 @@
 (defn start-system
   "config {:services [\"svs1\", \"svs2\"] :svs1 {} :svs2 {}}"
   [{_services :services :as config}]
-  (let [context (new-system {})]
+  (let [context (new-system config)]
     (read-manifests context config)
     (let [errors (get-system-state context [:errors])]
       (when (seq errors)
