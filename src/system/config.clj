@@ -46,7 +46,9 @@
    "keyword" keyword
    "boolean" coerce-boolean
    "string[]" coerce-vector-of-strings
-   "map" #(json/parse-string % keyword)})
+   "map" (fn [m] (cond (string? m) (json/parse-string m keyword)
+                       (map? m) m
+                       :else (throw (ex-info "Expect map or json string" {:value m}))))})
 
 (defn vector-of-strings? [v]
   (and (vector? v) (every? string? v)))
