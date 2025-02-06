@@ -12,14 +12,16 @@
 (s/def ::error-message-map (s/keys :req-un [::message]))
 (s/def ::validation-errors (s/coll-of ::message-map :kind vector?))
 
-(system/defmanifest
-  {:config {:param {:required true :type "string"}}
-   :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
-                 ::middleware {:args [::request]}}
-   :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
-   :events {:define {}
-            :subscribe {}}})
 
+
+(defn ensure-system-test-defined []
+  (system/defmanifest
+    {:config {:param {:required true :type "string"}}
+     :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
+                   ::middleware {:args [::request]}}
+     :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
+     :events {:define {}
+              :subscribe {}}}))
 
 
 (comment
@@ -37,6 +39,7 @@
   (system/info context ::stop))
 
 (deftest basic-test
+  (ensure-system-test-defined)
   (def context (system/start-system
                 {:services ["system-test"]
                  :system-test {:param "param"}}))
@@ -100,6 +103,7 @@
 
 
 (deftest test-slot
+  (ensure-system-test-defined)
   (def s-ctx (system/start-system {:services ["system-test"] :system-test {:param "param"}}))
 
   (is (thrown-with-msg?
@@ -124,6 +128,7 @@
   )
 
 (deftest test-hooks
+  (ensure-system-test-defined)
   (def context (system/start-system
                 {:services ["system-test" "module-a"]
                  :system-test {:param "param"}}))
