@@ -240,9 +240,10 @@
 
 (defn start-services [context {services :services :as config}]
   (doseq [svs services]
-    (when-let [start-fn (resolve (symbol (name svs) "start"))]
+    (if-let [start-fn (resolve (symbol (name svs) "start"))]
       (let [module-config (get-system-state context [:configs (keyword svs)])]
-        (start-fn context module-config)))))
+        (start-fn context module-config))
+      (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs)))))))
 
 (defn start-system
   "config {:services [\"svs1\", \"svs2\"] :svs1 {} :svs2 {}}"

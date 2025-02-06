@@ -29,13 +29,17 @@
 
   )
 
+(def system-test-stop? (atom nil))
+
 (system/defstart
   [context config]
   (system/info context ::start config)
+  (reset! system-test-stop? false)
   {:state :v1 :config config})
 
 (system/defstop
   [context state]
+  (reset! system-test-stop? true)
   (system/info context ::stop))
 
 (deftest basic-test
@@ -62,8 +66,9 @@
        Exception #"Invalid config"
        (system/start-system {:services ["system-test"] :system-test {:param 1}})))
 
+  (matcho/match @system-test-stop? false)
   (system/stop-system context)
-
+  (is (= true @system-test-stop?))
 
   (def ctx-with-cache (system/new-context context))
   (def num-cache-calls (atom 0))
