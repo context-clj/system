@@ -132,14 +132,16 @@
     `(when-not (contains? (:services @(:system ~ctx)) '~key)
        (swap! (:system ~ctx) update :services (fn [x#] (conj (or x# #{}) '~key)))
        (let [state# (do ~@body)]
-         (merge-system-state ~ctx [] state#)
+         (when (map? state#) (merge-system-state ~ctx [] state#))
          (println :start-module ~(name key))))))
 
 (defmacro defstart [params & body]
   (assert (= 2 (count params)))
   (let [fn-name 'start]
     `(defn ~fn-name ~params
-       (start-service ~(first params) ~@body))))
+       (let [b# (do ~@body)]
+         (when-not (or (map? b#) (nil? b#)) (throw (Exception. (str "start body should return config map, but got " (type b#)))))
+         (start-service ~(first params) b#)))))
 
 (defmacro stop-service [ctx & body]
   (let [key (.getName *ns*)]
@@ -252,6 +254,15 @@
         (start-fn context module-config))
       (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs)))))))
 
+(defn stop-system [ctx]
+  (let [system @(:system ctx)]
+    (doseq [sv (:services system)]
+      (require [sv])
+      (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
+        (info ctx :stoping sv)
+        (stop-fn ctx (get system (keyword (name sv))))
+        (info ctx :stopped sv)))))
+
 (defn start-system
   "config {:services [\"svs1\", \"svs2\"] :svs1 {} :svs2 {}}"
   [{_services :services :as config}]
@@ -261,17 +272,11 @@
       (when (seq errors)
         (error context ::config-error (str "Can't start, invalid configs: " (pr-str errors)))
         (throw (Exception. "Invalid config"))))
-    (start-services context config)
+    (try (start-services context config)
+         (catch Exception e
+           (try (stop-system context) (catch Exception e))
+           (throw e)))
     context))
-
-(defn stop-system [ctx]
-  (let [system @(:system ctx)]
-    (doseq [sv (:services system)]
-      (require [sv])
-      (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
-        (info ctx :stoping sv)
-        (stop-fn ctx (get system (keyword (name sv))))
-        (info ctx :stopped sv)))))
 
 
 ;; helper macro for tests
