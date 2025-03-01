@@ -9,6 +9,16 @@ Module is reusable library which represented as clojure namespace with `defmanif
 Statefull modules can declare `defstop/defstart` functions.
 But module is not forced to be stateful.
 
+System does:
+
+* manages modules state with system/get-system-state and set-system-state
+* manages configuration by validating params with manifest
+* provides population params from cli and env variables
+* allow dynamic change of configuration params - if it's allowed
+* provides pluggable configuration storage
+* provides uniform logging with system/info system/error
+
+
 Basic module may look like:
 
 ```clj
