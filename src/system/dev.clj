@@ -23,6 +23,9 @@
   (doseq [file (.listFiles (io/file "./libs"))]
     (git-pull file)))
 
+(defn add-pg []
+  (shell/sh "bash" "-c" "git submodule add git@github.com:context-clj/pg.git libs/pg"))
+
 (comment
   (update-libs)
 
