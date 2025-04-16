@@ -133,7 +133,7 @@
        (swap! (:system ~ctx) update :services (fn [x#] (conj (or x# #{}) '~key)))
        (let [state# (do ~@body)]
          (when (map? state#) (merge-system-state ~ctx [] state#))
-         (println :start-module ~(name key))))))
+         (info ~ctx ::start-module ~(name key))))))
 
 (defmacro defstart [params & body]
   (assert (= 2 (count params)))
