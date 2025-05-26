@@ -21,7 +21,9 @@
   (log-levels-inv (ctx-get-log-level-n context)))
 
 (defn error [context event & [message opts]]
-  (println :error event (or message "") (or opts "")))
+  (let [lvl (ctx-get-log-level-n context)]
+    (when (or (nil? lvl) (>= lvl (log-levels :error)))
+      (println :error event (or message "") (or opts "")))))
 
 (defn info [context event & [message opts]]
   (let [lvl (ctx-get-log-level-n context)]
