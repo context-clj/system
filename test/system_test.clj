@@ -3,7 +3,8 @@
             [matcho.core :as matcho]
             [clojure.spec.alpha :as s]
             [system]
-            [system.config :as config]))
+            [system.config :as config]
+            [clojure.string :as str]))
 
 (s/def ::resourceType string?)
 (s/def ::resource-map (s/keys :req-un [::resourceType]))
@@ -246,3 +247,30 @@
   (is (= {:conf {:foo true :bar "baz" :qux 123}}
          (config/coerce {:conf {:type "map"}}
                         {:conf "{\"foo\":true, \"bar\":\"baz\", \"qux\":123}"}))))
+
+(deftest test-logging
+  (ensure-system-test-defined)
+  (let [context (system/start-system
+                 {:services ["system-test"]
+                  :system-test {:param ""}})]
+    (testing "default log level (:info) produces output for both :info and :error log levels"
+      (let [output (with-out-str
+                     (system/error context "Hello from ERROR level"))]
+        (is (str/includes? output "Hello from ERROR level")))
+
+      (let [output (with-out-str
+                     (system/info context "Hello from INFO level"))]
+        (is (str/includes? output "Hello from INFO level"))))
+
+    (testing "default log level (:info) produces no output for :debug level"
+      (let [output (with-out-str
+                     (system/debug context "Hello from INFO level"))]
+        (is (empty? output))))
+
+    (testing ":off log level disables logging completely"
+      (let [context-without-logs (system/ctx-set-log-level context :off)
+            output (with-out-str
+                     (system/error context-without-logs "Hello from ERROR level")
+                     (system/info  context-without-logs "Hello from INFO level")
+                     (system/debug context-without-logs "Hello from DEBUG level"))]
+        (is (empty? output))))))
