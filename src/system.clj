@@ -5,7 +5,7 @@
 ;; TODO: rewrite start with context
 
 
-(def ^:const log-levels {:off Integer/MIN_VALUE :error 0 :info 1 :debug 2})
+(def ^:const log-levels {:off -1 :error 0 :info 1 :debug 2})
 (def ^:const log-levels-inv (reduce (fn [acc [k v]] (assoc acc v k)) {} log-levels))
 
 (defn ctx-set-log-level [context level]
