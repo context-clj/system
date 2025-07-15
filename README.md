@@ -159,7 +159,7 @@ while `system/debug` won't produce any output.
 ### How to declare global logging level in system's config
 
 ```clj
-(def config {:system/log-level :error})
+(def config {:system/log-level (system/log-levels :off)})
 
 (def context (system/start-system config))
 ```
