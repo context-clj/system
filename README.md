@@ -18,7 +18,6 @@ System does:
 * provides pluggable configuration storage
 * provides uniform logging with system/info system/error
 
-
 Basic module may look like:
 
 ```clj
@@ -79,7 +78,6 @@ There are few building blocks:
 
 modules could be versioned, but ideally they are not
 
-
 ```clj
 ;; context/http.manifest.edn
 {:name "context/http"
@@ -95,9 +93,9 @@ which results in separate jars
 
 fhir need a fhir.tx
 there could be several implementations
+
 * terbox
 * box.tx
-
 
 ```clj
 ;; system fhir-server
@@ -127,3 +125,66 @@ there could be several implementations
 - fhir.storage-format fhir | aidbox
 ```
 
+## Logging
+
+We have a very simplistic logging system at your disposal that you can easily incorporate into your app,
+especially if you are already using this package.
+
+### Logging functions
+
+* `system/error`
+* `system/info`
+* `system/debug`
+
+### Logging levels
+
+| Name     | Level    | Note                                        |
+|----------|:--------:|---------------------------------------------|
+| `:off`   |    -1    | Special level to disable logging completely |
+| `:error` |     0    |                                             |
+| `:info`  |     1    | *Default logging level*                     |
+| `:debug` |     2    |                                             |
+
+Log functions print message only if their log level is lower or equal to context's log level.
+For example, if context's log level is set to `:debug`, all logging functions will print a message.
+However if log level set to `:info`, only `system/info` and `system/error` will display any message,
+while `system/debug` won't produce any output.
+
+### How to check context's current log level
+
+```clj
+(system/ctx-get-log-level ctx)
+```
+
+### How to declare global logging level in system's config
+
+```clj
+(def config {:system/log-level (system/log-levels :off)})
+
+(def context (system/start-system config))
+```
+
+### How to set logging level dynamically
+
+Logging level is always bound to the context object. You change logging level by creating
+a new context with a specific logging level, that you can then pass to logging functions.
+
+```clj
+;; Create a new context with disabled logging
+(let [ctx-without-logging (system/ctx-set-log-level ctx :off)]
+  (system/error ctx-without-logging "None of these")
+  (system/info  ctx-without-logging "messages will")
+  (system/debug ctx-without-logging "be printed"))
+
+;; Use original ctx
+(system/error ctx "Printed as usual")
+(system/info  ctx "All good here as well")
+(system/debug ctx "Not printed because default log level is :info")
+```
+
+### Known issues
+
+* Not thread-safe. Undefined behavior if you log in a multi-threaded application
+* At the time being, no way to change output destination. All logging functions print to stdout using `println` under the hood
+  
+  (Open related issue: [Logging - file appender as module `context.logger.ndjson`](https://github.com/context-clj/system/issues/7))

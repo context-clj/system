@@ -273,4 +273,11 @@
                      (system/error context-without-logs "Hello from ERROR level")
                      (system/info  context-without-logs "Hello from INFO level")
                      (system/debug context-without-logs "Hello from DEBUG level"))]
-        (is (empty? output))))))
+        (is (empty? output)))))
+
+  (let [context (system/start-system
+                 {:services ["system-test"]
+                  :system-test {:param ""}
+                  :system/log-level (system/log-levels :off)})]
+    (is (= :off
+           (system/ctx-get-log-level context)))))
