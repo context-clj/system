@@ -153,9 +153,6 @@ while `system/debug` won't produce any output.
 ### How to check context's current log level
 
 ```clj
-;; Assume you have your app's ctx available at this point
-(declare ctx)
-
 (system/ctx-get-log-level ctx)
 ```
 
@@ -173,9 +170,6 @@ Logging level is always bound to the context object. You change logging level by
 a new context with a specific logging level, that you can then pass to logging functions.
 
 ```clj
-;; Assume you have your app's ctx available at this point
-(declare ctx)
-
 ;; Create a new context with disabled logging
 (let [ctx-without-logging (system/ctx-set-log-level ctx :off)]
   (system/error ctx-without-logging "None of these")
