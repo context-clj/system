@@ -43,6 +43,17 @@
   (reset! system-test-stop? true)
   (system/info context ::stop))
 
+(deftest all-systems-stops-on-system-start-failure
+  (ensure-system-test-defined)
+  (is
+   (thrown-with-msg?
+    Exception #"This module is broken!"
+    (def context (system/start-system
+                  {:services ["system-test" "module-broken"]
+                   :system-test {:param "param"}}))))
+  (is (= true @system-test-stop?)))
+
+
 (deftest basic-test
   (ensure-system-test-defined)
   (def context (system/start-system
