@@ -249,13 +249,6 @@
         (configs-from-manifest context manifest svs config))
       (throw (Exception. (str "No module " svs))))))
 
-(defn start-services [context {services :services :as config}]
-  (doseq [svs services]
-    (if-let [start-fn (resolve (symbol (name svs) "start"))]
-      (let [module-config (get-system-state context [:configs (keyword svs)])]
-        (start-fn context module-config))
-      (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs)))))))
-
 (defn stop-system [ctx]
   (let [system @(:system ctx)]
     (doseq [sv (:services system)]
@@ -264,6 +257,17 @@
         (info ctx :stoping sv)
         (stop-fn ctx (get system (keyword (name sv))))
         (info ctx :stopped sv)))))
+
+(defn start-services [context {services :services :as config}]
+  (try
+    (doseq [svs services]
+      (if-let [start-fn (resolve (symbol (name svs) "start"))]
+        (let [module-config (get-system-state context [:configs (keyword svs)])]
+          (start-fn context module-config))
+        (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs))))))
+    (catch Throwable t
+      (stop-system context)
+      (throw (.fillInStackTrace t)))))
 
 (defn start-system
   "config {:services [\"svs1\", \"svs2\"] :svs1 {} :svs2 {}}"
