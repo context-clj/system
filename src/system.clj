@@ -20,20 +20,21 @@
 (defn ctx-get-log-level [context]
   (log-levels-inv (ctx-get-log-level-n context)))
 
-(defn error [context event & [message opts]]
-  (let [lvl (ctx-get-log-level-n context)]
-    (when (or (nil? lvl) (>= lvl (log-levels :error)))
-      (println :error event (or message "") (or opts "")))))
+(defn make-logger [level]
+  (fn [context event & [message opts]]
+    (let [lvl (ctx-get-log-level-n context)]
+      (when (or (nil? lvl) (>= lvl (log-levels level)))
+        (println (-> java.time.ZoneOffset/UTC
+                           java.time.ZonedDateTime/now
+                           str)
+                 level
+                 event
+                 (or message "")
+                 (or opts ""))))))
 
-(defn info [context event & [message opts]]
-  (let [lvl (ctx-get-log-level-n context)]
-    (when (or (nil? lvl) (>= lvl (log-levels :info)))
-      (println :info event (or message "") (or opts "")))))
-
-(defn debug [context event & [message opts]]
-  (let [lvl (ctx-get-log-level-n context)]
-    (when (or (nil? lvl) (>= lvl (log-levels :debug)))
-      (println :debug event (or message "") (or opts "")))))
+(def error (make-logger :error))
+(def info (make-logger :info))
+(def debug (make-logger :debug))
 
 (s/def ::config :system.config/config-spec)
 (s/def ::description string?)
