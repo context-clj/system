@@ -285,29 +285,36 @@
            (throw e)))
     context))
 
-(def cli-options
-  ;; An option with an argument
-  [#_["-p" "--port PORT" "Port number"
-      :default 80
-      :parse-fn #(Integer/parseInt %)
-      :validate [#(< 0 % 0x10000) "Must be a number between 0 and 65536"]]
-   ;; A non-idempotent option (:default is applied first)
-   #_["-v" nil "Verbosity level"
-      :id :verbosity
-      :default 0
-      :update-fn inc] ; Prior to 0.4.1, you would have to use:
-   ;; :assoc-fn (fn [m k _] (update-in m [k] inc))
-   ;; A boolean option defaulting to nil
-   ["-m" "--modules MODULE" "Modules"
+(defn long-opt
+  [module param]
+  (let [module (if (keyword? module) (name module) (str module))
+        param (if (keyword? param) (name param) (str param))
+        argument (-> param
+                     (str/replace #"[-.]" "_")
+                     (str/upper-case))]
+    (format "--%s.%s %s"
+            module
+            param
+            argument)))
+
+(defn manifest->cli-opts
+  [module manifest]
+  (mapv (fn [[param _v]]
+          [nil (long-opt module param) nil])
+        (:config manifest)))
+
+(defn build-cli-opts
+  [manifests]
+  (->> manifests
+       (filter #(-> % second :config))
+       (map (fn [[module manifest]] (manifest->cli-opts module manifest)))
+       (apply concat)
+       (into [])))
+
+(def cli-opts
+  [["-m" "--modules MODULE" "Modules: todo list modules"
     :multi true
-    :update-fn (fnil conj [])
-    #_#_:parse-fn vector]
-   [nil nil nil
-    :id "module-options"
-    :multi true
-    :update-fn (fnil conj [])
-    #_#_:parse-fn vector]
-   ["-h" "--help"]])
+    :update-fn (fnil conj [])]])
 
 (defn find-manifests
   []
@@ -315,18 +322,15 @@
        (keep (fn [ns']
                (when-let [manifest (get (ns-map ns') 'manifest)]
                  {(-> ns' ns-name keyword) @manifest})))
-       (merge)))
+       (apply merge)))
 
-(defn build-cli-options
-  [manifests])
-
-(defn -main
-  "Entry point for CLI apps"
+(defn parse-args
   [& args]
-  (let [cli-options (-> (find-manifests)
-                        (build-cli-options))]
+  (let [cli-opts (concat cli-opts
+                         (-> (find-manifests)
+                             (build-cli-opts)))]
     (println
-   (parse-opts args cli-options))))
+     (parse-opts args cli-opts))))
 
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
