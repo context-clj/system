@@ -1,7 +1,8 @@
 (ns system
   (:require [system.config]
             [clojure.string :as str]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [clojure.tools.cli :refer [parse-opts]]))
 ;; TODO: rewrite start with context
 
 
@@ -46,7 +47,7 @@
                        (s/explain-data ~::manifest ~manifest)))
        (def ~(symbol "manifest") result#))))
 
-(defn- new-system [ & [config]]
+(defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
    :cache (atom {})})
 
@@ -215,7 +216,7 @@
           coerced-config (system.config/coerce schema module-config)
           errors         (system.config/validate schema coerced-config)]
       (if (seq errors)
-        (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
+        (do (error context ::invalid-config (str svs ": " (str/join ", " errors)))
             (set-system-state context [:errors module-key] errors))
         (do (info context ::valid-config svs)
             (set-system-state context [:configs module-key] coerced-config))))))
@@ -284,6 +285,48 @@
            (throw e)))
     context))
 
+(def cli-options
+  ;; An option with an argument
+  [#_["-p" "--port PORT" "Port number"
+      :default 80
+      :parse-fn #(Integer/parseInt %)
+      :validate [#(< 0 % 0x10000) "Must be a number between 0 and 65536"]]
+   ;; A non-idempotent option (:default is applied first)
+   #_["-v" nil "Verbosity level"
+      :id :verbosity
+      :default 0
+      :update-fn inc] ; Prior to 0.4.1, you would have to use:
+   ;; :assoc-fn (fn [m k _] (update-in m [k] inc))
+   ;; A boolean option defaulting to nil
+   ["-m" "--modules MODULE" "Modules"
+    :multi true
+    :update-fn (fnil conj [])
+    #_#_:parse-fn vector]
+   [nil nil nil
+    :id "module-options"
+    :multi true
+    :update-fn (fnil conj [])
+    #_#_:parse-fn vector]
+   ["-h" "--help"]])
+
+(defn find-manifests
+  []
+  (->> (all-ns)
+       (keep (fn [ns']
+               (when-let [manifest (get (ns-map ns') 'manifest)]
+                 {(-> ns' ns-name keyword) @manifest})))
+       (merge)))
+
+(defn build-cli-options
+  [manifests])
+
+(defn -main
+  "Entry point for CLI apps"
+  [& args]
+  (let [cli-options (-> (find-manifests)
+                        (build-cli-options))]
+    (println
+   (parse-opts args cli-options))))
 
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
@@ -298,16 +341,12 @@
      (defn ~'ensure-context []
        (when-not @~'context-atom
          (def ~'context (system/start-system ~cfg))
-         (reset! ~'context-atom ~'context)
-         ))))
+         (reset! ~'context-atom ~'context)))))
 
 (def cfg {:host "localhost" :port  5401 :database "context_pg" :user "admin" :password "admin"})
 
 
-(comment
-
-
-  )
+(comment)
 
 ;; TODO: add context cache set-context-cache, update-context-cache, get-context-cache and clear-context-cache
 ;; TODO: think about name convention like module-<module-name>.clj
@@ -317,4 +356,3 @@
 ;; TODO: open telemetry out of the box
 ;; on module registration it register all config params
 ;; this params are used to validate before start
-
