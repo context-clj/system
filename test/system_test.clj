@@ -212,7 +212,7 @@
          #"Invalid manifest"
          (system/defmanifest {:config "invalid"}))
         "Non-conforming config must throw"))
-  
+
   (testing "type validation"
     (doseq [type ["integer" "number" "keyword" "string" "string[]" "boolean" "map"]]
       (is (system/defmanifest {:config {:my-field {:type type}}})
@@ -238,7 +238,7 @@
     (is (system/start-system {:services [:system-test]
                               :system-test {:port 1234}})
         "Unexpected error when validating port")
-    
+
     (system/defmanifest {:config {:data {:type "map"}}})
     (is (system/start-system {:services [:system-test]
                               :system-test {:data {:a 1 :b "c"}}})

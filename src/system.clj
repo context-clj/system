@@ -63,14 +63,16 @@
 
 (defmacro defmanifest [manifest]
   `(do
-     (when-let [manifest-var-name# (-> ~*ns* find-manifest-var meta :name)]
+     (when-let [manifest-var-name# (some-> ~*ns* find-manifest-var meta :name)]
        (ns-unmap ~*ns* manifest-var-name#))
 
      (let [result# (s/conform ~::manifest ~manifest)]
        (if (= :clojure.spec.alpha/invalid result#)
          (throw (ex-info "Invalid manifest"
                          (s/explain-data ~::manifest ~manifest)))
-         (def ~(gensym "context-clj-manifest-") (with-meta result# {:context-clj/manifest true}))))))
+         (intern ~*ns*
+                 (gensym "context-clj-manifest-")
+                 (with-meta result# {:context-clj/manifest true}))))))
 
 (defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
@@ -266,8 +268,8 @@
   (doseq [svs services]
     (require (symbol svs))
     (info context ::load svs)
-    (if-let [manifest (resolve (symbol (name svs) "manifest"))]
-      (let [manifest (var-get manifest)]
+    (if-let [manifest (some-> svs name symbol find-ns find-manifest-var var-get)]
+      (do
         (info context ::manifest svs)
         (set-system-state context [:manifests (keyword svs)] manifest)
         (register-hooks-from-manifest context manifest)
