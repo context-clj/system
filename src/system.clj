@@ -351,6 +351,10 @@
     (println
      (parse-opts args cli-opts))))
 
+(defn -main [& args]
+  (println "System Main")
+  (println (all-ns)))
+
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
   `(do

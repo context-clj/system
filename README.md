@@ -125,6 +125,14 @@ there could be several implementations
 - fhir.storage-format fhir | aidbox
 ```
 
+## How to run your app from a command line
+
+```shell
+clj -M -i src/my_app_core.clj -m system
+```
+
+`-i <filepath>` is used to provide your app's file that has all modules declared with `defmodules` (usually it is `core.clj` with `-main` function).
+
 ## Logging
 
 We have a very simplistic logging system at your disposal that you can easily incorporate into your app,
@@ -186,5 +194,5 @@ a new context with a specific logging level, that you can then pass to logging f
 
 * Not thread-safe. Undefined behavior if you log in a multi-threaded application
 * At the time being, no way to change output destination. All logging functions print to stdout using `println` under the hood
-  
+
   (Open related issue: [Logging - file appender as module `context.logger.ndjson`](https://github.com/context-clj/system/issues/7))
