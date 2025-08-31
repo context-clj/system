@@ -40,8 +40,12 @@
 (s/def ::description string?)
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
 
-(defn find-manifest-var
-  [ns]
+(defmacro defmodules [modules]
+  `(do
+     ~@(for [module# modules]
+         `(require '~module#))))
+
+(defn find-manifest-var [ns]
   (->> ns
        (ns-map)
        (vals)
@@ -50,8 +54,7 @@
                (when (-> @var meta :context-clj/manifest)
                  var)))))
 
-(defn find-manifests
-  []
+(defn find-manifests []
   (->> (all-ns)
        (map (fn [ns]
               (when-let [manifest-var (find-manifest-var ns)]
