@@ -165,13 +165,18 @@
          (when (map? state#) (merge-system-state ~ctx [] state#))
          (info ~ctx ::start-module ~(name key))))))
 
-(defmacro defstart [params & body]
-  (assert (= 2 (count params)))
+(defmacro defstart
+  [[ctx cfg] & body]
   (let [fn-name 'start]
-    `(defn ~fn-name ~params
+    `(defn ~fn-name
+       {:context-clj/defstart true}
+       [~ctx ~cfg]
        (let [b# (do ~@body)]
-         (when-not (or (map? b#) (nil? b#)) (throw (Exception. (str "start body should return config map, but got " (type b#)))))
-         (start-service ~(first params) b#)))))
+         (if-not (or (map? b#) (nil? b#))
+           (throw
+            (ex-info (str "start body should return config map, but got " (type b#))
+                     {:return b#}))
+           (system/start-service ~ctx b#))))))
 
 (defmacro stop-service [ctx & body]
   (let [key (.getName *ns*)]
@@ -352,8 +357,9 @@
      (parse-opts args cli-opts))))
 
 (defn -main [& args]
+  (println "Main args: " args)
   (println "System Main")
-  (println (all-ns)))
+  (apply parse-args args))
 
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
