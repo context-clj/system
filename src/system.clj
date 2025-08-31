@@ -59,11 +59,15 @@
        (apply merge)))
 
 (defmacro defmanifest [manifest]
-  `(let [result# (s/conform ~::manifest ~manifest)]
-     (if (= :clojure.spec.alpha/invalid result#)
-       (throw (ex-info "Invalid manifest"
-                       (s/explain-data ~::manifest ~manifest)))
-       (def ~(gensym "context-clj-manifest-") (with-meta result# {:context-clj/manifest true})))))
+  `(do
+     (when-let [manifest-var-name# (-> ~*ns* find-manifest-var meta :name)]
+       (ns-unmap ~*ns* manifest-var-name#))
+
+     (let [result# (s/conform ~::manifest ~manifest)]
+       (if (= :clojure.spec.alpha/invalid result#)
+         (throw (ex-info "Invalid manifest"
+                         (s/explain-data ~::manifest ~manifest)))
+         (def ~(gensym "context-clj-manifest-") (with-meta result# {:context-clj/manifest true}))))))
 
 (defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
