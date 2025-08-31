@@ -40,12 +40,30 @@
 (s/def ::description string?)
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
 
+(defn find-manifest-var
+  [ns]
+  (->> ns
+       (ns-map)
+       (vals)
+       (filter var?)
+       (some (fn [var]
+               (when (-> @var meta :context-clj/manifest)
+                 var)))))
+
+(defn find-manifests
+  []
+  (->> (all-ns)
+       (map (fn [ns]
+              (when-let [manifest-var (find-manifest-var ns)]
+                {(-> ns ns-name keyword) @manifest-var})))
+       (apply merge)))
+
 (defmacro defmanifest [manifest]
   `(let [result# (s/conform ~::manifest ~manifest)]
      (if (= :clojure.spec.alpha/invalid result#)
        (throw (ex-info "Invalid manifest"
                        (s/explain-data ~::manifest ~manifest)))
-       (def ~(symbol "manifest") result#))))
+       (def ~(gensym "context-clj-manifest-") (with-meta result# {:context-clj/manifest true})))))
 
 (defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
@@ -315,14 +333,6 @@
   [["-m" "--modules MODULE" "Modules: todo list modules"
     :multi true
     :update-fn (fnil conj [])]])
-
-(defn find-manifests
-  []
-  (->> (all-ns)
-       (keep (fn [ns']
-               (when-let [manifest (get (ns-map ns') 'manifest)]
-                 {(-> ns' ns-name keyword) @manifest})))
-       (apply merge)))
 
 (defn parse-args
   [& args]
