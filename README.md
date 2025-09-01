@@ -131,7 +131,7 @@ there could be several implementations
 clj -M -i src/my_app_core.clj -m system
 ```
 
-`-i <filepath>` is used to provide your app's file that has all modules declared with `defmodules` (usually it is `core.clj` with `-main` function).
+`-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` with `-main` function).
 
 ## Logging
 

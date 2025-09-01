@@ -40,11 +40,6 @@
 (s/def ::description string?)
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
 
-(defmacro defmodules [modules]
-  `(do
-     ~@(for [module# modules]
-         `(require '~module#))))
-
 (defn find-manifest-var [ns]
   (->> ns
        (ns-map)
@@ -61,6 +56,20 @@
                 {(-> ns ns-name keyword) @manifest-var})))
        (apply merge)))
 
+(defn load-deps [deps]
+  (doseq [dep deps]
+    (let [dep-ns-sym (-> dep name symbol)]
+      (require dep-ns-sym)
+      (if-let [dep-ns (find-ns dep-ns-sym)]
+        (let [dep-manifest-var (find-manifest-var dep-ns)
+              dep-deps (:deps @dep-manifest-var)]
+          (when (seq dep-deps)
+            (load-deps dep-deps)))
+        (throw
+         (ex-info "No dependency namespace found: " dep
+                  {:dep dep
+                   :dep-ns-sym dep-ns-sym}))))))
+
 (defmacro defmanifest [manifest]
   `(do
      (when-let [manifest-var-name# (some-> ~*ns* find-manifest-var meta :name)]
@@ -70,9 +79,12 @@
        (if (= :clojure.spec.alpha/invalid result#)
          (throw (ex-info "Invalid manifest"
                          (s/explain-data ~::manifest ~manifest)))
-         (intern ~*ns*
-                 (gensym "context-clj-manifest-")
-                 (with-meta result# {:context-clj/manifest true}))))))
+         (let [manifest-var# (intern ~*ns*
+                                     (gensym "context-clj-manifest-")
+                                     (with-meta result# {:context-clj/manifest true}))]
+           (when-let [deps# (:deps result#)]
+             (load-deps deps#))
+           manifest-var#)))))
 
 (defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
