@@ -60,15 +60,10 @@
   (doseq [dep deps]
     (let [dep-ns-sym (-> dep name symbol)]
       (require dep-ns-sym)
-      (if-let [dep-ns (find-ns dep-ns-sym)]
-        (let [dep-manifest-var (find-manifest-var dep-ns)
-              dep-deps (:deps @dep-manifest-var)]
-          (when (seq dep-deps)
-            (load-deps dep-deps)))
-        (throw
-         (ex-info "No dependency namespace found: " dep
-                  {:dep dep
-                   :dep-ns-sym dep-ns-sym}))))))
+      (let [manifest @(-> dep-ns-sym find-ns find-manifest-var)
+            dep-deps (:deps manifest)]
+        (when (seq dep-deps)
+          (load-deps dep-deps))))))
 
 (defmacro defmanifest [manifest]
   `(do
