@@ -1,8 +1,10 @@
 (ns system
-  (:require [system.config]
-            [clojure.string :as str]
-            [clojure.spec.alpha :as s]
-            [clojure.tools.cli :refer [parse-opts]]))
+  (:require
+   [clojure.set :as set]
+   [clojure.spec.alpha :as s]
+   [clojure.string :as str]
+   [clojure.tools.cli :refer [parse-opts]]
+   [system.config]))
 ;; TODO: rewrite start with context
 
 
@@ -57,13 +59,25 @@
        (apply merge)))
 
 (defn load-deps [deps]
-  (doseq [dep deps]
-    (let [dep-ns-sym (-> dep name symbol)]
-      (require dep-ns-sym)
-      (let [manifest @(-> dep-ns-sym find-ns find-manifest-var)
-            dep-deps (:deps manifest)]
-        (when (seq dep-deps)
-          (load-deps dep-deps))))))
+  (loop [all-deps #{}
+         [dep & remain-deps] deps]
+    (cond
+      (not dep)
+      all-deps
+
+      (contains? all-deps dep)
+      (recur all-deps remain-deps)
+
+      :else
+      (let [dep-ns-sym (-> dep name symbol)]
+        (require dep-ns-sym)
+        (let [manifest @(-> dep name symbol find-ns find-manifest-var)
+              dep-deps (:deps manifest)]
+          (recur (conj all-deps dep)
+                 (cond-> remain-deps
+                   (seq dep-deps)
+                   (into (set/difference (set dep-deps)
+                                         all-deps)))))))))
 
 (defmacro defmanifest [manifest]
   `(do
