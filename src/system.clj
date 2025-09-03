@@ -61,28 +61,59 @@
 (defn load-deps [deps]
   (loop [all-deps #{}
          [dep & remain-deps] deps]
-    (cond
-      (not dep)
-      all-deps
+    (let [normalized-dep (some-> dep name)]
+      (cond
+        (not normalized-dep)
+        all-deps
 
-      (contains? all-deps dep)
-      (recur all-deps remain-deps)
+        (contains? all-deps normalized-dep)
+        (recur all-deps remain-deps)
 
-      :else
-      (let [dep-ns-sym (-> dep name symbol)]
-        (require dep-ns-sym)
-        (let [manifest @(-> dep name symbol find-ns find-manifest-var)
+        :else
+        (let [dep-ns-sym (symbol normalized-dep)]
+          (when-not (some-> dep-ns-sym find-ns find-manifest-var)
+            (require dep-ns-sym :reload))
+          (let [manifest (-> dep-ns-sym find-ns find-manifest-var var-get)
+                dep-deps (-> manifest :deps seq)]
+            (recur (conj all-deps dep)
+                   (cond-> remain-deps
+                     dep-deps
+                     (into (set/difference (set dep-deps)
+                                           (set remain-deps)
+                                           all-deps))))))))))
+
+(defn unload-deps [deps]
+  (loop [all-deps #{}
+         [dep & remain-deps] deps]
+    (let [normalized-dep (some-> dep name)]
+      (cond
+        (not normalized-dep)
+        (do
+          (doseq [dep all-deps
+                  :let [dep-ns (-> dep symbol find-ns)
+                        manifest-var (some-> dep-ns find-manifest-var)]
+                  :when manifest-var]
+            (ns-unmap dep-ns
+                      (-> manifest-var meta :name)))
+          all-deps)
+
+        :else
+        (let [dep-ns-sym (symbol normalized-dep)
+              manifest @(-> dep-ns-sym find-ns find-manifest-var)
               dep-deps (:deps manifest)]
           (recur (conj all-deps dep)
                  (cond-> remain-deps
                    (seq dep-deps)
                    (into (set/difference (set dep-deps)
+                                         (set remain-deps)
                                          all-deps)))))))))
 
 (defmacro defmanifest [manifest]
   `(do
-     (when-let [manifest-var-name# (some-> ~*ns* find-manifest-var meta :name)]
-       (ns-unmap ~*ns* manifest-var-name#))
+     (when-let [manifest-var# (find-manifest-var ~*ns*)]
+       (when-let [deps# (-> manifest-var# var-get :deps seq)]
+         (unload-deps deps#))
+       (ns-unmap ~*ns* (-> manifest-var# meta :name)))
 
      (let [result# (s/conform ~::manifest ~manifest)]
        (if (= :clojure.spec.alpha/invalid result#)
@@ -91,7 +122,7 @@
          (let [manifest-var# (intern ~*ns*
                                      (gensym "context-clj-manifest-")
                                      (with-meta result# {:context-clj/manifest true}))]
-           (when-let [deps# (:deps result#)]
+           (when-let [deps# (-> result# :deps seq)]
              (load-deps deps#))
            manifest-var#)))))
 
