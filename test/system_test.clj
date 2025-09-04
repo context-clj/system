@@ -222,7 +222,28 @@
          clojure.lang.ExceptionInfo
          #"Invalid manifest"
          (system/defmanifest {:config {:field-of-unsupported-type {:type "foobar"}}}))
-        "Unsupported field type must throw")))
+        "Unsupported field type must throw"))
+
+  (testing "defmanifest creates a var with unique name and special meta both in the var and the object"
+    (binding [*ns* (find-ns 'system-test)]
+      (let [_ (ensure-system-test-defined)
+            manifest-var (system/find-manifest-var *ns*)]
+        (is (str/starts-with? (-> manifest-var meta :name) "context-clj-manifest"))
+        (is (contains? (meta @manifest-var) :context-clj/manifest)))))
+
+  (testing "calling defmanifest again replaces old manifest"
+    (binding [*ns* (find-ns 'system-test)]
+      (let [_ (system/defmanifest {:description "module-description-1"})
+            old-manifest-var (system/find-manifest-var *ns*)
+            _ (system/defmanifest {:description "module-description-2"})
+            new-manifest-var (system/find-manifest-var *ns*)]
+        (is (not= old-manifest-var new-manifest-var))
+        (is (not= @old-manifest-var @new-manifest-var))
+        (is (= "module-description-1" (:description @old-manifest-var)))
+        (is (= "module-description-2" (:description @new-manifest-var)))
+        (is (->> (-> *ns* ns-map vals)
+                 (some #(= % old-manifest-var))
+                 (not)))))))
 
 (deftest test-start-system
   (testing "config value validation"
@@ -292,3 +313,11 @@
                   :system/log-level (system/log-levels :off)})]
     (is (= :off
            (system/ctx-get-log-level context)))))
+
+(deftest test-find-manifest-var
+  (binding [*ns* (find-ns 'system-test)]
+    (ensure-system-test-defined)
+    (let [manifest-var (system/find-manifest-var *ns*)]
+      (is (some? manifest-var))
+      (is (= (-> manifest-var meta :ns)
+             *ns*)))))
