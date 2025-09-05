@@ -219,7 +219,7 @@
 
 (defmacro defstart [[ctx cfg] & body]
   `(intern *ns*
-           (gensym "context-clj-start")
+           (symbol "start")
            (with-meta
              (fn [~ctx ~cfg]
                (let [b# (do ~@body)]
@@ -239,7 +239,7 @@
 
 (defmacro defstop [[ctx cfg] & body]
   `(intern *ns*
-           (gensym "context-clj-stop")
+           (symbol "stop")
            (with-meta
              (fn [~ctx ~cfg]
                (stop-service ~ctx ~@body))
