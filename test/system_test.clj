@@ -338,5 +338,5 @@
     (let [_ (system/defmanifest {:deps [:module-a :module-circular-a :module-circular-b]})
           actual-modules (-> (system/find-manifests) keys set)
           expect-modules #{:system-test :module-a :module-circular-a :module-circular-b}]
-      (is (= (set/intersection actual-modules expect-modules)
-             expect-modules)))))
+      (is (= expect-modules
+             (set/intersection actual-modules expect-modules))))))

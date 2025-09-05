@@ -219,16 +219,17 @@
 
 (defmacro defstart
   [[ctx cfg] & body]
-  (let [fn-name 'start]
-    `(defn ~fn-name
-       {:context-clj/defstart true}
-       [~ctx ~cfg]
-       (let [b# (do ~@body)]
-         (if-not (or (map? b#) (nil? b#))
-           (throw
-            (ex-info (str "start body should return config map, but got " (type b#))
-                     {:return b#}))
-           (system/start-service ~ctx b#))))))
+  `(intern *ns*
+           (gensym "context-clj-start")
+           (with-meta
+             (fn [~ctx ~cfg]
+               (let [b# (do ~@body)]
+                 (if-not (or (map? b#) (nil? b#))
+                   (throw
+                    (ex-info (str "start body should return config map, but got " (type b#))
+                             {:return b#}))
+                   (system/start-service ~ctx b#))))
+             {:context-clj/defstart true})))
 
 (defmacro stop-service [ctx & body]
   (let [key (.getName *ns*)]
@@ -343,10 +344,15 @@
         (stop-fn ctx (get system (keyword (name sv))))
         (info ctx :stopped sv)))))
 
-(defn start-services [context {services :services :as config}]
+(defn start-services [context {services :services :as _config}]
   (try
     (doseq [svs services]
-      (if-let [start-fn (resolve (symbol (name svs) "start"))]
+      (println svs)
+      (if-let [start-fn (->> (-> svs name symbol find-ns ns-map vals)
+                             (filter var?)
+                             (map var-get)
+                             (filter #(-> % meta :context-clj/defstart))
+                             (first))]
         (let [module-config (get-system-state context [:configs (keyword svs)])]
           (start-fn context module-config))
         (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs))))))
