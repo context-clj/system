@@ -217,8 +217,7 @@
          (when (map? state#) (merge-system-state ~ctx [] state#))
          (info ~ctx ::start-module ~(name key))))))
 
-(defmacro defstart
-  [[ctx cfg] & body]
+(defmacro defstart [[ctx cfg] & body]
   `(intern *ns*
            (gensym "context-clj-start")
            (with-meta
@@ -238,11 +237,13 @@
        (swap! (:system ~ctx) update :services (fn [x#] (when x# (disj x# '~key))))
        (clear-system-state ~ctx []))))
 
-(defmacro defstop [params & body]
-  (assert (= 2 (count params)))
-  (let [fn-name 'stop]
-    `(defn ~fn-name ~params
-       (stop-service ~(first params) ~@body))))
+(defmacro defstop [[ctx cfg] & body]
+  `(intern *ns*
+           (gensym "context-clj-stop")
+           (with-meta
+             (fn [~ctx ~cfg]
+               (stop-service ~ctx ~@body))
+             {:context-clj/defstop true})))
 
 (defn ctx-get [ctx path]
   (get-in ctx path))
@@ -339,7 +340,11 @@
   (let [system @(:system ctx)]
     (doseq [sv (:services system)]
       (require [sv])
-      (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
+      (when-let [stop-fn (->> (-> sv name symbol find-ns ns-map vals)
+                              (filter var?)
+                              (map var-get)
+                              (filter #(-> % meta :context-clj/defstop))
+                              (first))]
         (info ctx :stoping sv)
         (stop-fn ctx (get system (keyword (name sv))))
         (info ctx :stopped sv)))))
