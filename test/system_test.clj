@@ -6,7 +6,8 @@
    [clojure.test :refer [deftest is testing]]
    [matcho.core :as matcho]
    [system]
-   [system.config :as config]))
+   [system.config :as config]
+   [system.manifest :refer [find-manifest-var find-manifests]]))
 
 (s/def ::resourceType string?)
 (s/def ::resource-map (s/keys :req-un [::resourceType]))
@@ -226,16 +227,16 @@
   (testing "defmanifest creates a var with unique name and special meta both in the var and the object"
     (binding [*ns* (find-ns 'system-test)]
       (let [_ (ensure-system-test-defined)
-            manifest-var (system/find-manifest-var *ns*)]
+            manifest-var (find-manifest-var *ns*)]
         (is (str/starts-with? (-> manifest-var meta :name) "context-clj-manifest"))
         (is (contains? (meta @manifest-var) :context-clj/manifest)))))
 
   (testing "calling defmanifest again replaces old manifest (reloads module)"
     (binding [*ns* (find-ns 'system-test)]
       (let [_ (system/defmanifest {:description "module-description-1"})
-            old-manifest-var (system/find-manifest-var *ns*)
+            old-manifest-var (find-manifest-var *ns*)
             _ (ensure-system-test-defined)
-            new-manifest-var (system/find-manifest-var *ns*)]
+            new-manifest-var (find-manifest-var *ns*)]
         (is (not= old-manifest-var new-manifest-var))
         (is (not= @old-manifest-var @new-manifest-var))
         (is (= "module-description-1" (:description @old-manifest-var)))
@@ -247,12 +248,12 @@
   (testing "loads dependencies eagerly"
     (let [dep :module-circular-a
           _ (system/defmanifest {:deps [dep]})]
-      (is (some-> dep symbol find-ns system/find-manifest-var some?))))
+      (is (some-> dep symbol find-ns find-manifest-var some?))))
 
   (testing "handles circular dependencies"
     (let [_ (system/defmanifest {:deps [:module-circular-a :module-circular-b]})]
-      (is (some-> :module-circular-a symbol find-ns system/find-manifest-var some?))
-      (is (some-> :module-circular-b symbol find-ns system/find-manifest-var some?)))))
+      (is (some-> :module-circular-a symbol find-ns find-manifest-var some?))
+      (is (some-> :module-circular-b symbol find-ns find-manifest-var some?)))))
 
 (deftest test-start-system
   (testing "config value validation"
@@ -328,7 +329,7 @@
 (deftest test-find-manifest-var
   (binding [*ns* (create-ns (gensym))]
     (ensure-system-test-defined)
-    (let [manifest-var (system/find-manifest-var *ns*)]
+    (let [manifest-var (find-manifest-var *ns*)]
       (is (some? manifest-var))
       (is (= (-> manifest-var meta :ns)
              *ns*)))))
@@ -336,7 +337,7 @@
 (deftest test-find-manifests
   (binding [*ns* (create-ns (gensym))]
     (let [_ (system/defmanifest {:deps [:module-a :module-circular-a :module-circular-b]})
-          actual-modules (-> (system/find-manifests) keys set)
+          actual-modules (-> (find-manifests) keys set)
           expect-modules #{:system-test :module-a :module-circular-a :module-circular-b}]
       (is (= expect-modules
              (set/intersection actual-modules expect-modules))))))

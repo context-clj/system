@@ -1,10 +1,11 @@
 (ns system
   (:require
-   [clojure.set :as set]
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
-   [clojure.tools.cli :refer [parse-opts]]
-   [system.config]))
+   [system.cli :refer [parse-args]]
+   [system.config]
+   [system.manifest :refer [find-manifest-var load-deps unload-deps]]
+   [system.meta :refer [find-var-with-meta]]))
 ;; TODO: rewrite start with context
 
 
@@ -41,72 +42,6 @@
 (s/def ::config :system.config/config-spec)
 (s/def ::description string?)
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
-
-(defn find-manifest-var [ns]
-  (->> ns
-       (ns-map)
-       (vals)
-       (filter var?)
-       (some (fn [var]
-               (when (-> @var meta :context-clj/manifest)
-                 var)))))
-
-(defn find-manifests []
-  (->> (all-ns)
-       (map (fn [ns]
-              (when-let [manifest-var (find-manifest-var ns)]
-                {(-> ns ns-name keyword) @manifest-var})))
-       (apply merge)))
-
-(defn load-deps [deps]
-  (loop [all-deps #{}
-         [dep & remain-deps] deps]
-    (let [normalized-dep (some-> dep name)]
-      (cond
-        (not normalized-dep)
-        all-deps
-
-        (contains? all-deps normalized-dep)
-        (recur all-deps remain-deps)
-
-        :else
-        (let [dep-ns-sym (symbol normalized-dep)]
-          (when-not (some-> dep-ns-sym find-ns find-manifest-var)
-            (require dep-ns-sym :reload))
-          (let [manifest (-> dep-ns-sym find-ns find-manifest-var var-get)
-                dep-deps (-> manifest :deps seq)]
-            (recur (conj all-deps dep)
-                   (cond-> remain-deps
-                     dep-deps
-                     (into (set/difference (set dep-deps)
-                                           (set remain-deps)
-                                           all-deps))))))))))
-
-(defn unload-deps [deps]
-  (loop [all-deps #{}
-         [dep & remain-deps] deps]
-    (let [normalized-dep (some-> dep name)]
-      (cond
-        (not normalized-dep)
-        (do
-          (doseq [dep all-deps
-                  :let [dep-ns (-> dep symbol find-ns)
-                        manifest-var (some-> dep-ns find-manifest-var)]
-                  :when manifest-var]
-            (ns-unmap dep-ns
-                      (-> manifest-var meta :name)))
-          all-deps)
-
-        :else
-        (let [dep-ns-sym (symbol normalized-dep)
-              manifest @(-> dep-ns-sym find-ns find-manifest-var)
-              dep-deps (:deps manifest)]
-          (recur (conj all-deps dep)
-                 (cond-> remain-deps
-                   (seq dep-deps)
-                   (into (set/difference (set dep-deps)
-                                         (set remain-deps)
-                                         all-deps)))))))))
 
 (defmacro defmanifest [manifest]
   `(do
@@ -336,28 +271,25 @@
         (configs-from-manifest context manifest svs config))
       (throw (Exception. (str "No module " svs))))))
 
+(defn- find-stop-fn-var [ns]
+  (find-var-with-meta ns :context-clj/defstop))
+
 (defn stop-system [ctx]
   (let [system @(:system ctx)]
     (doseq [sv (:services system)]
       (require [sv])
-      (when-let [stop-fn (->> (-> sv name symbol find-ns ns-map vals)
-                              (filter var?)
-                              (map var-get)
-                              (filter #(-> % meta :context-clj/defstop))
-                              (first))]
+      (when-let [stop-fn (some-> sv name symbol find-ns find-stop-fn-var var-get)]
         (info ctx :stoping sv)
         (stop-fn ctx (get system (keyword (name sv))))
         (info ctx :stopped sv)))))
 
+(defn- find-start-fn-var [ns]
+  (find-var-with-meta ns :context-clj/defstart))
+
 (defn start-services [context {services :services :as _config}]
   (try
     (doseq [svs services]
-      (println svs)
-      (if-let [start-fn (->> (-> svs name symbol find-ns ns-map vals)
-                             (filter var?)
-                             (map var-get)
-                             (filter #(-> % meta :context-clj/defstart))
-                             (first))]
+      (if-let [start-fn (some-> svs name symbol find-ns find-start-fn-var var-get)]
         (let [module-config (get-system-state context [:configs (keyword svs)])]
           (start-fn context module-config))
         (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs))))))
@@ -379,51 +311,6 @@
            (try (stop-system context) (catch Exception e))
            (throw e)))
     context))
-
-(defn long-opt
-  [module param]
-  (let [module (if (keyword? module) (name module) (str module))
-        param (if (keyword? param) (name param) (str param))
-        argument (-> param
-                     (str/replace #"[-.]" "_")
-                     (str/upper-case))]
-    (format "--%s.%s %s"
-            module
-            param
-            argument)))
-
-(defn manifest->cli-opts
-  [module manifest]
-  (mapv (fn [[param _v]]
-          [nil (long-opt module param) nil])
-        (:config manifest)))
-
-(defn cli-opts-configs
-  [manifests]
-  (->> manifests
-       (filter #(-> % second :config))
-       (map (fn [[module manifest]] (manifest->cli-opts module manifest)))
-       (apply concat)
-       (into [])))
-
-(defn cli-opts-modules
-  [manifests]
-  (let [description (->> manifests
-                         (map #(-> % first name))
-                         (str/join ", ")
-                         (str "Available modules: "))]
-    ["-m" "--modules MODULE" description
-     :multi true
-     :update-fn (fnil conj [])]))
-
-(defn parse-args
-  [& args]
-  (let [manifests (find-manifests)
-        cli-opts (-> []
-                     (conj (cli-opts-modules manifests))
-                     (into (cli-opts-configs manifests)))]
-    (println
-     (parse-opts args cli-opts))))
 
 (defn -main [& args]
   (println "Main args: " args)
