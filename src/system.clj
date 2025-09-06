@@ -398,7 +398,7 @@
           [nil (long-opt module param) nil])
         (:config manifest)))
 
-(defn build-cli-opts
+(defn cli-opts-configs
   [manifests]
   (->> manifests
        (filter #(-> % second :config))
@@ -406,16 +406,22 @@
        (apply concat)
        (into [])))
 
-(def cli-opts
-  [["-m" "--modules MODULE" "Modules: todo list modules"
-    :multi true
-    :update-fn (fnil conj [])]])
+(defn cli-opts-modules
+  [manifests]
+  (let [description (->> manifests
+                         (map #(-> % first name))
+                         (str/join ", ")
+                         (str "Available modules: "))]
+    ["-m" "--modules MODULE" description
+     :multi true
+     :update-fn (fnil conj [])]))
 
 (defn parse-args
   [& args]
-  (let [cli-opts (concat cli-opts
-                         (-> (find-manifests)
-                             (build-cli-opts)))]
+  (let [manifests (find-manifests)
+        cli-opts (-> []
+                     (conj (cli-opts-modules manifests))
+                     (into (cli-opts-configs manifests)))]
     (println
      (parse-opts args cli-opts))))
 
