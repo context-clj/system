@@ -278,10 +278,12 @@
   (let [system @(:system ctx)]
     (doseq [sv (:services system)]
       (require [sv])
-      (when-let [stop-fn (some-> sv name symbol find-ns find-stop-fn-var var-get)]
-        (info ctx :stoping sv)
-        (stop-fn ctx (get system (keyword (name sv))))
-        (info ctx :stopped sv)))))
+      (let [sv-ns (-> sv name symbol find-ns)]
+        (when-let [stop-fn (some-> sv-ns find-stop-fn-var var-get)]
+          (binding [*ns* sv-ns]
+            (info ctx :stoping sv)
+            (stop-fn ctx (get system (keyword (name sv))))
+            (info ctx :stopped sv)))))))
 
 (defn- find-start-fn-var [ns]
   (find-var-with-meta ns :context-clj/defstart))
@@ -289,10 +291,12 @@
 (defn start-services [context {services :services :as _config}]
   (try
     (doseq [svs services]
-      (if-let [start-fn (some-> svs name symbol find-ns find-start-fn-var var-get)]
-        (let [module-config (get-system-state context [:configs (keyword svs)])]
-          (start-fn context module-config))
-        (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs))))))
+      (let [svs-ns (-> svs name symbol find-ns)]
+        (if-let [start-fn (some-> svs-ns find-start-fn-var var-get)]
+          (let [module-config (get-system-state context [:configs (keyword svs)])]
+            (binding [*ns* svs-ns]
+              (start-fn context module-config)))
+          (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs)))))))
     (catch Throwable t
       (stop-system context)
       (throw (.fillInStackTrace t)))))

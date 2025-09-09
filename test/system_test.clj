@@ -19,13 +19,14 @@
 
 
 (defn ensure-system-test-defined []
-  (system/defmanifest
-    {:config {:param {:required true :type "string"}}
-     :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
-                   ::middleware {:args [::request]}}
-     :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
-     :events {:define {}
-              :subscribe {}}}))
+  (binding [*ns* (find-ns 'system-test)]
+    (system/defmanifest
+      {:config {:param {:required true :type "string"}}
+       :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
+                     ::middleware {:args [::request]}}
+       :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
+       :events {:define {}
+                :subscribe {}}})))
 
 
 (comment
@@ -47,54 +48,52 @@
   (system/info context ::stop))
 
 (deftest all-systems-stops-on-system-start-failure
-  (binding [*ns* (find-ns 'system-test)]
-    (ensure-system-test-defined)
-    (is
-     (thrown-with-msg?
-      Exception #"This module is broken!"
-      (def context (system/start-system
-                    {:services ["system-test" "module-broken"]
-                     :system-test {:param "param"}}))))
-    (is (= true @system-test-stop?))))
+  (ensure-system-test-defined)
+  (is
+   (thrown-with-msg?
+    Exception #"This module is broken!"
+    (def context (system/start-system
+                  {:services ["system-test" "module-broken"]
+                   :system-test {:param "param"}}))))
+  (is (= true @system-test-stop?)))
 
 
 (deftest basic-test
-  (binding [*ns* (find-ns 'system-test)]
-    (ensure-system-test-defined)
-    (def context (system/start-system
-                  {:services ["system-test"]
-                   :system-test {:param "param"}}))
+  (ensure-system-test-defined)
+  (def context (system/start-system
+                {:services ["system-test"]
+                 :system-test {:param "param"}}))
 
-    (matcho/match
-     (system/get-system-state context [:config])
-      {:param "param"})
+  (matcho/match
+   (system/get-system-state context [:config])
+    {:param "param"})
 
-    (testing "system state after start"
-      (matcho/match (system/get-system-state context [:state]) :v1))
+  (testing "system state after start"
+    (matcho/match (system/get-system-state context [:state]) :v1))
 
-    (testing "set-system-state"
-      (system/set-system-state context [:state] :v2)
-      (matcho/match (system/get-system-state context [:state]) :v2))
+  (testing "set-system-state"
+    (system/set-system-state context [:state] :v2)
+    (matcho/match (system/get-system-state context [:state]) :v2))
 
-    (system/clear-system-state context [:state])
-    (matcho/match (system/get-system-state context [:state]) nil?)
+  (system/clear-system-state context [:state])
+  (matcho/match (system/get-system-state context [:state]) nil?)
 
-    (is (thrown-with-msg?
-         Exception #"Invalid config"
-         (system/start-system {:services ["system-test"] :system-test {:param 1}})))
+  (is (thrown-with-msg?
+       Exception #"Invalid config"
+       (system/start-system {:services ["system-test"] :system-test {:param 1}})))
 
-    (matcho/match @system-test-stop? false)
-    (system/stop-system context)
-    (is (= true @system-test-stop?))
+  (matcho/match @system-test-stop? false)
+  (system/stop-system context)
+  (is (= true @system-test-stop?))
 
-    (def ctx-with-cache (system/new-context context))
-    (def num-cache-calls (atom 0))
+  (def ctx-with-cache (system/new-context context))
+  (def num-cache-calls (atom 0))
 
-    (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
-    (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
-    (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
+  (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
 
-    (matcho/match @num-cache-calls 1)))
+  (matcho/match @num-cache-calls 1))
 
 (defn process-middlewares [context request]
   (let [context (system/reduce-hooks-into-context context ::middleware request)]
@@ -123,68 +122,62 @@
 
 
 (deftest test-slot
-  (binding [*ns* (find-ns 'system-test)]
-    (ensure-system-test-defined)
-    (def s-ctx (system/start-system {:services ["system-test"] :system-test {:param "param"}}))
+  (ensure-system-test-defined)
+  (def s-ctx (system/start-system {:services ["system-test"] :system-test {:param "param"}}))
 
-    (is (thrown-with-msg?
-         Exception #"No slot registered for :system-test/save"
-         (system/call-slot s-ctx ::save {})))
+  (is (thrown-with-msg?
+       Exception #"No slot registered for :system-test/save"
+       (system/call-slot s-ctx ::save {})))
 
-    (is (thrown-with-msg?
-         Exception #"No slot registered for :system-test/save"
-         (save s-ctx  {})))
+  (is (thrown-with-msg?
+       Exception #"No slot registered for :system-test/save"
+       (save s-ctx  {})))
 
-    (system/register-slot s-ctx ::save {:fn (fn [ctx res] (assoc res :id "id"))})
+  (system/register-slot s-ctx ::save {:fn (fn [ctx res] (assoc res :id "id"))})
 
-    (matcho/match (system/call-slot s-ctx ::save {}) {:id "id"})
+  (matcho/match (system/call-slot s-ctx ::save {}) {:id "id"})
 
-    (matcho/match (save s-ctx {}) {:id "id"})
+  (matcho/match (save s-ctx {}) {:id "id"})
 
-    (def s-ctx' (system/start-system {:services ["system-test" "module-a"]
-                                      :system-test {:param "param"}}))
+  (def s-ctx' (system/start-system {:services ["system-test" "module-a"]
+                                    :system-test {:param "param"}}))
 
-    (matcho/match (save s-ctx' {}) {:id "id" :ts "ts"})))
+  (matcho/match (save s-ctx' {}) {:id "id" :ts "ts"}))
 
 (deftest test-hooks
-  (binding [*ns* (find-ns 'system-test)]
-    (ensure-system-test-defined)
-    (intern *ns*
-            'context
-            (system/start-system
-             {:services ["system-test" "module-a"]
-              :system-test {:param "param"}}))
+  (ensure-system-test-defined)
+  (def context (system/start-system
+                {:services ["system-test" "module-a"]
+                 :system-test {:param "param"}}))
 
-    (testing "hook call"
-      (matcho/match
-       (create context {:resourceType "Patient"})
-        {:status :error, :errors [{:message "id is required"}]})
+  (testing "hook call"
+    (matcho/match
+     (create context {:resourceType "Patient"})
+      {:status :error, :errors [{:message "id is required"}]})
 
-      (matcho/match
-       (create context {:resourceType "Patient" :id "pt-1"})
-        {:status :ok, :resource {:resourceType "Patient", :id "pt-1"}}))
+    (matcho/match
+     (create context {:resourceType "Patient" :id "pt-1"})
+      {:status :ok, :resource {:resourceType "Patient", :id "pt-1"}}))
 
+  (testing "hook-reduce-context"
+    (def ctx'' (process-middlewares context {:get "/user"}))
+    (matcho/match (get-user ctx'') nil?)
+    (matcho/match (get-client ctx'') nil?)
 
-    (testing "hook-reduce-context"
+    (matcho/match (system/get-hooks context ::middleware) nil?)
 
-      (def ctx'' (process-middlewares context {:get "/user"}))
-      (matcho/match (get-user ctx'') nil?)
-      (matcho/match (get-client ctx'') nil?)
+    (system/register-hook context ::middleware ::mw1 {:fn #'set-user})
+    (system/register-hook context ::middleware ::mw2 {:fn #'set-client})
 
-      (matcho/match (system/get-hooks context ::middleware) nil?)
+    (matcho/match
+     (system/get-hooks context ::middleware)
+      {::mw1 {:fn #'system-test/set-user}
+       ::mw2 {:fn #'system-test/set-client}})
 
-      (system/register-hook context ::middleware ::mw1 {:fn #'set-user})
-      (system/register-hook context ::middleware ::mw2 {:fn #'set-client})
+    (def ctx' (process-middlewares context {:get "/user"}))
 
-      (matcho/match
-       (system/get-hooks context ::middleware)
-        {::mw1 {:fn #'system-test/set-user}
-         ::mw2 {:fn #'system-test/set-client}})
-
-      (def ctx' (process-middlewares context {:get "/user"}))
-
-      (matcho/match (get-user ctx')   {:id "admin"})
-      (matcho/match (get-client ctx') {:id "client"}))))
+    (matcho/match (get-user ctx')   {:id "admin"})
+    (matcho/match (get-client ctx') {:id "client"})))
 
 (deftest test-defmanifest
   (testing "when validator is an atom"
@@ -225,22 +218,22 @@
         "Unsupported field type must throw"))
 
   (testing "defmanifest creates a var with unique name and special meta both in the var and the object"
-    (binding [*ns* (find-ns 'system-test)]
-      (let [_ (ensure-system-test-defined)
+    (binding [*ns* (create-ns (gensym))]
+      (let [_ (system/defmanifest {})
             manifest-var (find-manifest-var *ns*)]
         (is (str/starts-with? (-> manifest-var meta :name) "context-clj-manifest"))
         (is (contains? (meta @manifest-var) :context-clj/manifest)))))
 
   (testing "calling defmanifest again replaces old manifest (reloads module)"
-    (binding [*ns* (find-ns 'system-test)]
+    (binding [*ns* (create-ns (gensym))]
       (let [_ (system/defmanifest {:description "module-description-1"})
             old-manifest-var (find-manifest-var *ns*)
-            _ (ensure-system-test-defined)
+            _ (system/defmanifest {:description "module-description-2"})
             new-manifest-var (find-manifest-var *ns*)]
         (is (not= old-manifest-var new-manifest-var))
         (is (not= @old-manifest-var @new-manifest-var))
         (is (= "module-description-1" (:description @old-manifest-var)))
-        (is (nil? (:description @new-manifest-var)))
+        (is (= "module-description-2" (:description @new-manifest-var)))
         (is (->> (-> *ns* ns-map vals)
                  (some #(= % old-manifest-var))
                  (not))))))
@@ -258,23 +251,28 @@
 (deftest test-start-system
   (testing "config value validation"
     (binding [*ns* (find-ns 'system-test)]
-      (system/defmanifest {:config {:number-field {:type "number"}}})
-      (is (thrown-with-msg?
-           Exception
-           #"Invalid config"
-           (system/start-system {:services [:system-test]
-                                 :system-test {:number-field "not a number"}}))
-          "A field value of wrong type must throw")
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:number-field {:type "number"}}})
+        (is (thrown-with-msg?
+             Exception
+             #"Invalid config"
+             (system/start-system {:services [module-name]
+                                   module-name {:number-field "not a number"}}))
+            "A field value of wrong type must throw")))
 
-      (system/defmanifest {:config {:port {:type "integer"}}})
-      (is (system/start-system {:services [:system-test]
-                                :system-test {:port 1234}})
-          "Unexpected error when validating port")
+    (binding [*ns* (find-ns 'system-test)]
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:port {:type "integer"}}})
+        (is (system/start-system {:services [module-name]
+                                  module-name {:port 1234}})
+            "Unexpected error when validating port")))
 
-      (system/defmanifest {:config {:data {:type "map"}}})
-      (is (system/start-system {:services [:system-test]
-                                :system-test {:data {:a 1 :b "c"}}})
-          "Unexpected error when validating data"))))
+    (binding [*ns* (find-ns 'system-test)]
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:data {:type "map"}}})
+        (is (system/start-system {:services [module-name]
+                                  module-name {:data {:a 1 :b "c"}}})
+            "Unexpected error when validating data")))))
 
 (deftest test-coerce
   (is (= {:port 123}
@@ -292,8 +290,7 @@
                         {:conf "{\"foo\":true, \"bar\":\"baz\", \"qux\":123}"}))))
 
 (deftest test-logging
-  (binding [*ns* (find-ns 'system-test)]
-    (ensure-system-test-defined)
+  (ensure-system-test-defined)
     (let [context (system/start-system
                    {:services ["system-test"]
                     :system-test {:param ""}})]
@@ -324,11 +321,11 @@
                     :system-test {:param ""}
                     :system/log-level (system/log-levels :off)})]
       (is (= :off
-             (system/ctx-get-log-level context))))))
+             (system/ctx-get-log-level context)))))
 
 (deftest test-find-manifest-var
   (binding [*ns* (create-ns (gensym))]
-    (ensure-system-test-defined)
+    (system/defmanifest {})
     (let [manifest-var (find-manifest-var *ns*)]
       (is (some? manifest-var))
       (is (= (-> manifest-var meta :ns)
