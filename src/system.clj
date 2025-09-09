@@ -334,9 +334,6 @@
 
 (def cfg {:host "localhost" :port  5401 :database "context_pg" :user "admin" :password "admin"})
 
-
-(comment)
-
 ;; TODO: add context cache set-context-cache, update-context-cache, get-context-cache and clear-context-cache
 ;; TODO: think about name convention like module-<module-name>.clj
 ;; TODO: pass service state to stop
