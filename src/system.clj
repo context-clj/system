@@ -45,21 +45,24 @@
 
 (defmacro defmanifest [manifest]
   `(do
-     (when-let [manifest-var# (find-manifest-var *ns*)]
-       (when-let [deps# (-> manifest-var# var-get :deps seq)]
-         (unload-deps deps#))
-       (ns-unmap *ns* (-> manifest-var# meta :name)))
+     (let [context-clj-ns-helper-sym# (gensym "context-clj-ns-helper")]
+       (def context-clj-ns-helper-sym# nil)
+       (let [context-clj-ns# (-> context-clj-ns-helper-sym# var meta :ns)]
+         (when-let [manifest-var# (find-manifest-var context-clj-ns#)]
+           (when-let [deps# (-> manifest-var# var-get :deps seq)]
+             (unload-deps deps#))
+           (ns-unmap context-clj-ns# (-> manifest-var# meta :name)))
 
-     (let [result# (s/conform ~::manifest ~manifest)]
-       (if (= :clojure.spec.alpha/invalid result#)
-         (throw (ex-info "Invalid manifest"
-                         (s/explain-data ~::manifest ~manifest)))
-         (let [manifest-var# (intern *ns*
-                                     (gensym "context-clj-manifest-")
-                                     (with-meta result# {:context-clj/manifest true}))]
-           (when-let [deps# (-> result# :deps seq)]
-             (load-deps deps#))
-           manifest-var#)))))
+         (let [result# (s/conform ~::manifest ~manifest)]
+           (if (= :clojure.spec.alpha/invalid result#)
+             (throw (ex-info "Invalid manifest"
+                             (s/explain-data ~::manifest ~manifest)))
+             (let [manifest-var# (intern context-clj-ns#
+                                         (gensym "context-clj-manifest-")
+                                         (with-meta result# {:context-clj/manifest true}))]
+               (when-let [deps# (-> result# :deps seq)]
+                 (load-deps deps#))
+               manifest-var#)))))))
 
 (defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
@@ -260,7 +263,7 @@
 
 (defn read-manifests [context {services :services :as config}]
   (doseq [svs services]
-    (require (symbol svs))
+    (require (symbol svs) :reload)
     (info context ::load svs)
     (if-let [manifest (some-> svs name symbol find-ns find-manifest-var var-get)]
       (do

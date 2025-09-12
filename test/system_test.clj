@@ -19,14 +19,13 @@
 
 
 (defn ensure-system-test-defined []
-  (binding [*ns* (find-ns 'system-test)]
-    (system/defmanifest
-      {:config {:param {:required true :type "string"}}
-       :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
-                     ::middleware {:args [::request]}}
-       :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
-       :events {:define {}
-                :subscribe {}}})))
+  (system/defmanifest
+    {:config {:param {:required true :type "string"}}
+     :define-hook {::validate   {:args [::resource-map] :result ::validation-errors}
+                   ::middleware {:args [::request]}}
+     :define-slot {::save       {:args [::resource-map] :result ::resource-map}}
+     :events {:define {}
+              :subscribe {}}}))
 
 
 (comment
@@ -34,7 +33,7 @@
 
   )
 
-(def system-test-stop? (atom nil))
+(defonce system-test-stop? (atom nil))
 
 (system/defstart
   [context config]
@@ -218,25 +217,25 @@
         "Unsupported field type must throw"))
 
   (testing "defmanifest creates a var with unique name and special meta both in the var and the object"
-    (binding [*ns* (create-ns (gensym))]
+    (let [test-ns (find-ns 'system-test)]
       (let [_ (system/defmanifest {})
-            manifest-var (find-manifest-var *ns*)]
+            manifest-var (find-manifest-var test-ns)]
         (is (str/starts-with? (-> manifest-var meta :name) "context-clj-manifest"))
         (is (contains? (meta @manifest-var) :context-clj/manifest)))))
 
   (testing "calling defmanifest again replaces old manifest (reloads module)"
-    (binding [*ns* (create-ns (gensym))]
-      (let [_ (system/defmanifest {:description "module-description-1"})
-            old-manifest-var (find-manifest-var *ns*)
-            _ (system/defmanifest {:description "module-description-2"})
-            new-manifest-var (find-manifest-var *ns*)]
-        (is (not= old-manifest-var new-manifest-var))
-        (is (not= @old-manifest-var @new-manifest-var))
-        (is (= "module-description-1" (:description @old-manifest-var)))
-        (is (= "module-description-2" (:description @new-manifest-var)))
-        (is (->> (-> *ns* ns-map vals)
-                 (some #(= % old-manifest-var))
-                 (not))))))
+    (let [test-ns (find-ns 'system-test)
+          _ (system/defmanifest {:description "module-description-1"})
+          old-manifest-var (find-manifest-var test-ns)
+          _ (system/defmanifest {:description "module-description-2"})
+          new-manifest-var (find-manifest-var test-ns)]
+      (is (not= old-manifest-var new-manifest-var))
+      (is (not= @old-manifest-var @new-manifest-var))
+      (is (= "module-description-1" (:description @old-manifest-var)))
+      (is (= "module-description-2" (:description @new-manifest-var)))
+      (is (->> (-> test-ns ns-map vals)
+               (some #(= % old-manifest-var))
+               (not)))))
 
   (testing "loads dependencies eagerly"
     (let [dep :module-circular-a
@@ -324,17 +323,16 @@
              (system/ctx-get-log-level context)))))
 
 (deftest test-find-manifest-var
-  (binding [*ns* (create-ns (gensym))]
+  (let [test-ns (find-ns 'system-test)]
     (system/defmanifest {})
-    (let [manifest-var (find-manifest-var *ns*)]
+    (let [manifest-var (find-manifest-var test-ns)]
       (is (some? manifest-var))
       (is (= (-> manifest-var meta :ns)
-             *ns*)))))
+             test-ns)))))
 
 (deftest test-find-manifests
-  (binding [*ns* (create-ns (gensym))]
-    (let [_ (system/defmanifest {:deps [:module-a :module-circular-a :module-circular-b]})
-          actual-modules (-> (find-manifests) keys set)
-          expect-modules #{:system-test :module-a :module-circular-a :module-circular-b}]
-      (is (= expect-modules
-             (set/intersection actual-modules expect-modules))))))
+  (system/defmanifest {:deps [:module-a :module-circular-a :module-circular-b]})
+  (let [actual-modules (-> (find-manifests) keys set)
+        expect-modules #{:system-test :module-a :module-circular-a :module-circular-b}]
+    (is (= expect-modules
+           (set/intersection actual-modules expect-modules)))))
