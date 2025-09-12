@@ -175,11 +175,11 @@
        (swap! (:system ~ctx) update :services (fn [x#] (when x# (disj x# '~key))))
        (clear-system-state ~ctx []))))
 
-(defmacro defstop [[ctx cfg] & body]
+(defmacro defstop [[ctx state] & body]
   `(intern *ns*
            (symbol "stop")
            (with-meta
-             (fn [~ctx ~cfg]
+             (fn [~ctx ~state]
                (stop-service ~ctx ~@body))
              {:context-clj/defstop true})))
 
