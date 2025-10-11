@@ -1,6 +1,7 @@
 (ns system.cli
   (:require
    [clojure.string :as str]
+   [system.config :refer [coercers type-validators]]
    [system.manifest :refer [find-manifests]]))
 
 (defn long-opt
@@ -15,9 +16,33 @@
             param
             argument)))
 
-(defn field-config->properties [field-config]
-  (throw
-   (UnsupportedOperationException. "Not implemented")))
+(defn field-config->properties [{:keys [type default required sensitive validator] :as _field-config}]
+  (let [validators (cond-> []
+                     (some? type)
+                     (conj (get type-validators type))
+
+                     (some? validator)
+                     (conj validator))]
+    (cond-> []
+      (some? type)
+      (conj :parse-fn
+            (fn [arg]
+              (if-let [coercer (get coercers type)]
+                (coercer arg)
+                arg)))
+
+      (some? default)
+      (conj :default default)
+
+      (some? required)
+      (conj :required)
+
+      ;; TODO: probably should remove this
+      (some? sensitive)
+      (identity)
+
+      (seq validators)
+      (conj :validate-fn validators))))
 
 (defn manifest->cli-opts
   [module manifest]
