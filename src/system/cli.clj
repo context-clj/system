@@ -21,21 +21,10 @@
             argument)))
 
 (defn opt-description
-  [{:keys [type default required sensitive] :as _field-config}]
-  (str/join
-   " | "
-   (cond-> []
-     (some? type)
-     (conj (str "TYPE: " type))
-
-     (some? default)
-     (conj (str "DEFAULT: " default))
-
-     (some? required)
-     (conj "REQUIRED")
-
-     (some? sensitive)
-     (conj "SENSITIVE"))))
+  [field-config]
+  (prn-str
+   (select-keys field-config
+                [:type :default :required :sensitive])))
 
 (defn opt-validator
   ([type]
