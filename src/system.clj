@@ -2,7 +2,8 @@
   (:require
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
-   [system.cli :refer [parse-args]]
+   [clojure.tools.cli :refer [parse-opts]]
+   [system.cli :as cli]
    [system.config]
    [system.manifest :refer [find-manifest-var load-deps unload-deps]]
    [system.meta :refer [find-var-with-meta]]))
@@ -319,10 +320,26 @@
            (throw e)))
     context))
 
+(defn- exit [status msg]
+  (println msg)
+  (System/exit status))
+
 (defn -main [& args]
-  (println "Main args: " args)
-  (println "System Main")
-  (apply parse-args args))
+  (let [cli-opts
+        (cli/cli-opts-from-manifests)
+
+        {:keys [options errors summary]}
+        (parse-opts args cli-opts)]
+    (cond
+      (:help options)
+      (exit 0 (cli/usage summary))
+
+      errors
+      (exit 1 (cli/error-msg errors))
+
+      :else
+      (let [system-config (cli/options->system-config options)]
+        (start-system system-config)))))
 
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
