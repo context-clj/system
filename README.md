@@ -133,6 +133,20 @@ clj -M -i src/my_app_core.clj -m system
 
 `-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` with `-main` function).
 
+### Passing params of various types
+
+1. `string[]`
+
+    ```shell
+    clj -M -i src/my_app_core.clj -m system --core.param-1 1337 --core.param-1 foobar --core.param-1 "Hello World!"
+    ```
+
+2. `map`
+
+    ```shell
+    clj -M -i src/my_app_core.clj -m system --core.param-3 '{"a": 42}'
+    ```
+
 ## Logging
 
 We have a very simplistic logging system at your disposal that you can easily incorporate into your app,

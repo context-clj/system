@@ -37,21 +37,36 @@
      (some? sensitive)
      (conj "SENSITIVE"))))
 
+(defn opt-validator
+  ([type]
+   (let [validator (get type-validators type (constantly true))]
+     (opt-validator type validator)))
+
+  ([type validator]
+   (let [coercer (get coercers type identity)]
+     (fn [arg]
+       (-> arg coercer validator)))))
+
 (defn opt-properties
   [module param {:keys [type default required sensitive validator] :as _field-config}]
   (let [validators (cond-> []
-                     (some? type)
-                     (conj (get type-validators type))
+                     (not= type "string[]")
+                     (conj (opt-validator type)
+                           (str "Expected type: " type))
 
                      (some? validator)
-                     (conj validator))]
+                     (conj (opt-validator type validator)
+                           (str "Custom validator: " validator)))]
     (cond-> []
-      (some? type)
-      (conj :parse-fn
-            (fn [arg]
-              (if-let [coercer (get coercers type)]
-                (coercer arg)
-                arg)))
+      (= type "string[]")
+      (conj :update-fn (fnil conj [])
+            :multi true)
+
+      (not= type "string[]")
+      (conj :parse-fn (get coercers type identity))
+
+      (seq validators)
+      (conj :validate validators)
 
       (some? default)
       (conj :default default)
@@ -64,10 +79,7 @@
 
       ;; TODO: probably should remove this
       (some? sensitive)
-      (identity)
-
-      (seq validators)
-      (conj :validate-fn validators))))
+      (identity))))
 
 (defn manifest->cli-opts
   [module manifest]
