@@ -15,11 +15,16 @@
             param
             argument)))
 
+(defn field-config->properties [field-config]
+  (throw
+   (UnsupportedOperationException. "Not implemented")))
+
 (defn manifest->cli-opts
   [module manifest]
-  (mapv (fn [[param _v]]
-          [nil (long-opt module param) nil])
-        (:config manifest)))
+  (vec
+   (for [[param field-config] (:config manifest)]
+     (into [nil (long-opt module param) nil]
+           (field-config->properties field-config)))))
 
 (defn cli-opts-configs
   [manifests]
