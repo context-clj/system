@@ -4,19 +4,41 @@
    [system.config :refer [coercers type-validators]]
    [system.manifest :refer [find-manifests]]))
 
+(defn long-opt-name
+  [module param]
+  (let [module-str (if (keyword? module) (name module) (str module))
+        param-str (if (keyword? param) (name param) (str param))]
+    (str module-str "." param-str)))
+
 (defn long-opt
   [module param]
-  (let [module (if (keyword? module) (name module) (str module))
-        param (if (keyword? param) (name param) (str param))
+  (let [opt-name (long-opt-name module param)
         argument (-> param
                      (str/replace #"[-.]" "_")
                      (str/upper-case))]
-    (format "--%s.%s %s"
-            module
-            param
+    (format "--%s %s"
+            opt-name
             argument)))
 
-(defn field-config->properties [{:keys [type default required sensitive validator] :as _field-config}]
+(defn opt-description
+  [{:keys [type default required sensitive] :as _field-config}]
+  (str/join
+   " | "
+   (cond-> []
+     (some? type)
+     (conj (str "TYPE: " type))
+
+     (some? default)
+     (conj (str "DEFAULT: " default))
+
+     (some? required)
+     (conj "REQUIRED")
+
+     (some? sensitive)
+     (conj "SENSITIVE"))))
+
+(defn opt-properties
+  [module param {:keys [type default required sensitive validator] :as _field-config}]
   (let [validators (cond-> []
                      (some? type)
                      (conj (get type-validators type))
@@ -35,7 +57,10 @@
       (conj :default default)
 
       (some? required)
-      (conj :required)
+      (conj :missing
+            (str "Missing argument: "
+                 "--"
+                 (long-opt-name module param)))
 
       ;; TODO: probably should remove this
       (some? sensitive)
@@ -48,8 +73,10 @@
   [module manifest]
   (vec
    (for [[param field-config] (:config manifest)]
-     (into [nil (long-opt module param) nil]
-           (field-config->properties field-config)))))
+     (-> [nil]
+         (conj (long-opt module param))
+         (conj (opt-description field-config))
+         (into (opt-properties module param field-config))))))
 
 (defn cli-opts-configs
   [manifests]
