@@ -56,12 +56,12 @@
      (str module-part "--" param-part))))
 
 (defn env-val
-  [type module param]
+  [param-type module param]
   (let [env-key' (env-key module param)
         env-val' (env env-key')
-        coercer  (get coercers type identity)]
+        coercer  (get coercers param-type identity)]
     (when (some? env-val')
-      (if (= type "string[]")
+      (if (= param-type "string[]")
         (try
           (-> env-val' read-string vec)
           (catch Exception _e
@@ -77,32 +77,37 @@
           :env-val (env-val (:type field-config) module param)}}))
 
 (defn opt-validator
-  ([type]
-   (let [validator (get type-validators type (constantly true))]
-     (opt-validator type validator)))
+  ([param-type]
+   (let [validator (get type-validators param-type (constantly true))]
+     (opt-validator param-type validator)))
 
-  ([type validator]
-   (let [coercer (get coercers type identity)]
+  ([param-type validator]
+   (let [coercer (get coercers param-type identity)]
      (fn [arg]
        (-> arg coercer validator)))))
 
 (defn opt-properties
-  [module param {:keys [type default required sensitive validator] :as _field-config}]
+  [module param {param-type :type
+                 default    :default
+                 required   :required
+                 sensitive  :sensitive
+                 validator  :validator
+                 :as _field-config}]
   (let [validators (cond-> []
-                     (not= type "string[]")
-                     (conj (opt-validator type)
-                           (str "Expected type: " type))
+                     (not= param-type "string[]")
+                     (conj (opt-validator param-type)
+                           (str "Expected type: " param-type))
 
                      (some? validator)
-                     (conj (opt-validator type validator)
+                     (conj (opt-validator param-type validator)
                            (str "Custom validator: " validator)))]
     (cond-> []
-      (= type "string[]")
+      (= param-type "string[]")
       (conj :update-fn (fnil conj [])
             :multi true)
 
-      (not= type "string[]")
-      (conj :parse-fn (get coercers type identity))
+      (not= param-type "string[]")
+      (conj :parse-fn (get coercers param-type identity))
 
       (seq validators)
       (conj :validate validators)
@@ -110,11 +115,11 @@
       (some? default)
       (conj :default default
             :default-fn (fn [_options]
-                          (or (env-val type module param)
+                          (or (env-val param-type module param)
                               default)))
 
       (and (some? required)
-           (nil? (env-val type module param)))
+           (nil? (env-val param-type module param)))
       (conj :missing
             (str "Missing argument: "
                  "--"
