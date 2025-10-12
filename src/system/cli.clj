@@ -89,13 +89,22 @@
 
 (defn cli-opts-modules
   [manifests]
-  (let [description (->> manifests
-                         (map #(-> % first name))
+  (let [all-module-names (map #(-> % first name) manifests)
+        description (->> all-module-names
+                         (map #(str \" % \"))
                          (str/join ", ")
                          (str "Available modules: "))]
     ["-m" "--modules MODULE" description
      :multi true
-     :update-fn (fnil conj [])]))
+     :update-fn (fnil conj [])
+     :missing "Must provide at least one module using --modules argument"
+     :validate [(fn [arg]
+                  (->> all-module-names
+                       (filter #(= % arg))
+                       (seq)))
+                (fn [arg]
+                  (str "No module named \"" arg "\" found. "
+                       description))]]))
 
 (def cli-opts-default
   [["-h" "--help" "Display help"]])
