@@ -137,5 +137,24 @@
        (str/join \newline errors)))
 
 (defn options->system-config [options]
-  (throw
-   (UnsupportedOperationException. "Not implemented")))
+  (let [all-module-names
+        (->> (find-manifests)
+             (map #(-> % first name)))
+
+        module-param-options
+        (filter (fn [[arg-key _arg-val :as _option]]
+                  (some (fn [module-name]
+                          (str/starts-with? (name arg-key)
+                                            (str module-name ".")))
+                        all-module-names))
+                options)]
+    (reduce (fn [acc [arg-key arg-val :as _option]]
+              (let [[_ module-name param-name]
+                    (re-matches #"(.*)\.([^.]+)$"
+                                (name arg-key))]
+                (assoc-in acc
+                          [(keyword module-name)
+                           (keyword param-name)]
+                          arg-val)))
+            {:services (:modules options)}
+            module-param-options)))
