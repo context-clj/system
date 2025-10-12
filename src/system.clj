@@ -325,11 +325,8 @@
   (System/exit status))
 
 (defn -main [& args]
-  (let [cli-opts
-        (cli/cli-opts-from-manifests)
-
-        {:keys [options errors summary]}
-        (parse-opts args cli-opts)]
+  (let [{:keys [options errors summary]}
+        (cli/parse-args args)]
     (cond
       (:help options)
       (exit 0 (cli/usage summary))

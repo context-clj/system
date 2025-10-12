@@ -1,6 +1,7 @@
 (ns system.cli
   (:require
    [clojure.string :as str]
+   [clojure.tools.cli :refer [parse-opts]]
    [system.config :refer [coercers type-validators]]
    [system.manifest :refer [find-manifests]]))
 
@@ -89,11 +90,14 @@
 
 (defn cli-opts-modules
   [manifests]
-  (let [all-module-names (map #(-> % first name) manifests)
-        description (->> all-module-names
-                         (map #(str \" % \"))
-                         (str/join ", ")
-                         (str "Available modules: "))]
+  (let [all-module-names
+        (map #(-> % first name) manifests)
+
+        description
+        (->> all-module-names
+             (map #(str \" % \"))
+             (str/join ", ")
+             (str "Available modules: "))]
     ["-m" "--modules MODULE" description
      :multi true
      :update-fn (fnil conj [])
@@ -113,8 +117,7 @@
   (let [manifests (find-manifests)]
     (-> []
         (conj (cli-opts-modules manifests))
-        (into (cli-opts-configs manifests))
-        (into cli-opts-default))))
+        (into (cli-opts-configs manifests)))))
 
 (defn usage [options-summary]
   (->> ["This is my program. There are many like it, but this one is mine."
@@ -135,6 +138,17 @@
 (defn error-msg [errors]
   (str "The following errors occurred while parsing your command:\n\n"
        (str/join \newline errors)))
+
+(defn parse-args
+  ([args]
+   (parse-args args []))
+
+  ([args cli-opts-custom]
+   (let [cli-opts (-> []
+                      (into (cli-opts-from-manifests))
+                      (into cli-opts-custom)
+                      (into cli-opts-default))]
+     (parse-opts args cli-opts))))
 
 (defn options->system-config [options]
   (let [all-module-names
