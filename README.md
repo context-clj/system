@@ -125,15 +125,51 @@ there could be several implementations
 - fhir.storage-format fhir | aidbox
 ```
 
-## How to run your app from a command line
+## Command-line interface
+
+context-clj allows you to configure and start your app using CLI.
+You can either use a provided default runner or completely customize it for your own needs.
+
+### How to run your app with a default runner
 
 ```shell
-clj -M -i src/my_app_core.clj -m system
+clj -M -i src/my_app_core.clj -m system \
+    --modules <module-1> \
+    --modules <module-2> \
+    --module-1.param-1 <param-1> \
+    --module-2.param-2 <param-1>
 ```
 
-`-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` with `-main` function).
+`-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` that has some sort of an entry point).
 
-### Passing params of various types
+### Help command
+
+There is a nice `--help` flag that shows what modules your app has and prints info on module params:
+
+```shell
+clj -M -i src/my_app_core.clj -m system --help
+
+# Default context-clj system runner
+#
+# Usage:
+#   clj -M -i <path-to-main-module.clj> -m system
+#       --modules <module-1>
+#       --modules <module-2>
+#       --module-1.param-1 <param-1>
+#       --module-2.param-2 <param-2>
+#
+# Options:
+#   -m, --modules MODULE                Available modules: "module-a", "core"
+#       --core.param-1 :PARAM_1         {:type "string[]", :required true}
+#       --core.param-2 :PARAM_2  Hello  {:type "string", :default "Hello", :required true}
+#       --core.param-3 :PARAM_3         {:type "map", :required true}
+#   -h, --help                          Display help
+#
+# Please refer to context-clj README to override the default runner:
+# https://github.com/context-clj/system/blob/main/README.md
+```
+
+### Passing system config params of various types
 
 1. `string[]`
 
@@ -146,6 +182,33 @@ clj -M -i src/my_app_core.clj -m system
     ```shell
     clj -M -i src/my_app_core.clj -m system --core.param-3 '{"a": 42}'
     ```
+
+### How to override default runner and create a custom CLI
+
+We provide a bunch of simple functions as an API that allows you to change CLI behavior completely:
+
+1. `system.cli/parse-args`
+2. `system.cli/error-msg`
+3. `system.cli/exit`
+4. `system.cli/options->system-config`
+
+You can take the default runner's code as a template to create a custom CLI in your app code:
+
+```clojure
+(defn -main [& args]
+  (let [{:keys [options errors summary]}
+        (cli/parse-args args)]
+    (cond
+      (:help options)
+      (cli/exit 0 (usage summary))
+
+      errors
+      (cli/exit 1 (cli/error-msg errors))
+
+      :else
+      (let [system-config (cli/options->system-config options)]
+        (start-system system-config)))))
+```
 
 ## Logging
 
