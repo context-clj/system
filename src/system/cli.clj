@@ -64,8 +64,11 @@
       (select-keys field-config
                    [:type :default :required :sensitive])
       :env {:env-var (env-name module param)
-            :env-val (and env-val
-                          (read-string env-val))}))))
+            :env-val (try
+                       (when (some? env-val)
+                         (read-string env-val))
+                       (catch Exception _e
+                         env-val))}))))
 
 (defn opt-validator
   ([type]
@@ -217,11 +220,14 @@
 
       (reduce (fn [acc {:keys [env-key module param]}]
                 (let [env-val (env env-key)]
-                  (cond-> acc
-                    (some? env-val)
-                    (assoc-in [(keyword module)
-                               (keyword param)]
-                              (read-string env-val)))))
+                  (try
+                    (cond-> acc
+                      (some? env-val)
+                      (assoc-in [(keyword module)
+                                 (keyword param)]
+                                (read-string env-val)))
+                    (catch Exception _
+                      acc))))
               system-config
               env-key-module-params)
 
