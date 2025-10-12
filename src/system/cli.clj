@@ -119,25 +119,10 @@
         (conj (cli-opts-modules manifests))
         (into (cli-opts-configs manifests)))))
 
-(defn usage [options-summary]
-  (->> ["This is my program. There are many like it, but this one is mine."
-        ""
-        "Usage: program-name [options] action"
-        ""
-        "Options:"
-        options-summary
-        ""
-        "Actions:"
-        "  start    Start a new server"
-        "  stop     Stop an existing server"
-        "  status   Print a server's status"
-        ""
-        "Please refer to the manual page for more information."]
-       (str/join \newline)))
 
-(defn error-msg [errors]
-  (str "The following errors occurred while parsing your command:\n\n"
-       (str/join \newline errors)))
+;;;; ===============================================================================================
+;;;; Public API functions
+;;;; ===============================================================================================
 
 (defn parse-args
   ([args]
@@ -149,6 +134,14 @@
                       (into cli-opts-custom)
                       (into cli-opts-default))]
      (parse-opts args cli-opts))))
+
+(defn error-msg [errors]
+  (str "The following errors occurred while parsing command line arguments:\n\n"
+       (str/join \newline errors)))
+
+(defn exit [status msg]
+  (println msg)
+  (System/exit status))
 
 (defn options->system-config [options]
   (let [all-module-names

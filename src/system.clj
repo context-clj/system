@@ -2,7 +2,6 @@
   (:require
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
-   [clojure.tools.cli :refer [parse-opts]]
    [system.cli :as cli]
    [system.config]
    [system.manifest :refer [find-manifest-var load-deps unload-deps]]
@@ -320,19 +319,32 @@
            (throw e)))
     context))
 
-(defn- exit [status msg]
-  (println msg)
-  (System/exit status))
+(defn- usage [options-summary]
+  (->> ["Default context-clj system runner"
+        ""
+        "Usage:"
+        "  clj -M -i <path-to-main-module.clj> -m system"
+        "      --modules <module-1>"
+        "      --modules <module-2>"
+        "      --module-1.param-1 <param-1>"
+        "      --module-2.param-2 <param-2>"
+        ""
+        "Options:"
+        options-summary
+        ""
+        "Please refer to context-clj README to override the default runner:"
+        "https://github.com/context-clj/system/blob/main/README.md"]
+       (str/join \newline)))
 
 (defn -main [& args]
   (let [{:keys [options errors summary]}
         (cli/parse-args args)]
     (cond
       (:help options)
-      (exit 0 (cli/usage summary))
+      (cli/exit 0 (usage summary))
 
       errors
-      (exit 1 (cli/error-msg errors))
+      (cli/exit 1 (cli/error-msg errors))
 
       :else
       (let [system-config (cli/options->system-config options)]
