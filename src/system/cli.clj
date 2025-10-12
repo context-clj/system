@@ -2,14 +2,20 @@
   (:require
    [clojure.string :as str]
    [clojure.tools.cli :refer [parse-opts]]
+   [environ.core :refer [env]]
    [system.config :refer [coercers type-validators]]
    [system.manifest :refer [find-manifests]]))
 
+(defn- ->str [v]
+  (if (keyword? v)
+    (name v)
+    (str v)))
+
 (defn long-opt-name
   [module param]
-  (let [module-str (if (keyword? module) (name module) (str module))
-        param-str (if (keyword? param) (name param) (str param))]
-    (str module-str "." param-str)))
+  (str (->str module)
+       "."
+       (->str param)))
 
 (defn long-opt
   [module param]
@@ -21,11 +27,44 @@
             opt-name
             argument)))
 
+(defn env-name
+  [module param]
+  (let [module-part
+        (-> module
+            (->str)
+            (str/replace #"[-.]" "_"))
+
+        param-part
+        (-> param
+            (->str)
+            (str/replace #"[-.]" "_"))]
+    (str/upper-case
+     (str module-part "__" param-part))))
+
+(defn env-key
+  [module param]
+  (let [module-part
+        (-> module
+            (->str)
+            (str/replace #"\." "-"))
+
+        param-part
+        (-> param
+            (->str)
+            (str/replace #"\." "-"))]
+    (keyword
+     (str module-part "--" param-part))))
+
 (defn opt-description
-  [field-config]
-  (prn-str
-   (select-keys field-config
-                [:type :default :required :sensitive])))
+  [module param field-config]
+  (let [env-key (env-key module param)
+        env-val (env env-key)]
+    (prn-str
+     (cond-> (select-keys field-config
+                          [:type :default :required :sensitive])
+       env-val
+       (assoc :env {(env-name module param)
+                    env-val})))))
 
 (defn opt-validator
   ([type]
@@ -77,7 +116,7 @@
    (for [[param field-config] (:config manifest)]
      (-> [nil]
          (conj (long-opt module param))
-         (conj (opt-description field-config))
+         (conj (opt-description module param field-config))
          (into (opt-properties module param field-config))))))
 
 (defn cli-opts-configs
