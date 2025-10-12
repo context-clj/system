@@ -1,5 +1,6 @@
 (ns system
   (:require
+   [clojure.pprint :as pp]
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
    [system.cli :as cli]
@@ -348,6 +349,9 @@
 
       :else
       (let [system-config (cli/options->system-config options)]
+        (println "\nStarting system with config:")
+        (pp/pprint system-config)
+        (println)
         (start-system system-config)))))
 
 ;; helper macro for tests

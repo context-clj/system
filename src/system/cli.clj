@@ -60,11 +60,12 @@
   (let [env-key (env-key module param)
         env-val (env env-key)]
     (prn-str
-     (cond-> (select-keys field-config
-                          [:type :default :required :sensitive])
-       env-val
-       (assoc :env {(env-name module param)
-                    env-val})))))
+     (assoc
+      (select-keys field-config
+                   [:type :default :required :sensitive])
+      :env {:env-var (env-name module param)
+            :env-val (and env-val
+                          (read-string env-val))}))))
 
 (defn opt-validator
   ([type]
@@ -183,24 +184,54 @@
   (System/exit status))
 
 (defn options->system-config [options]
-  (let [all-module-names
-        (->> (find-manifests)
-             (map #(-> % first name)))
+  (let [manifests
+        (find-manifests)
+
+        all-module-param-long-opt-names
+        (set
+         (for [[module manifest]
+               manifests
+
+               param
+               (-> manifest :config keys)]
+           (long-opt-name module param)))
+
+        env-key-module-params
+        (for [[module manifest]
+              manifests
+
+              param
+              (-> manifest :config keys)]
+          {:env-key (env-key module param)
+           :module  module
+           :param   param})
 
         module-param-options
-        (filter (fn [[arg-key _arg-val :as _option]]
-                  (some (fn [module-name]
-                          (str/starts-with? (name arg-key)
-                                            (str module-name ".")))
-                        all-module-names))
+        (filter (fn [[arg-key arg-val :as _option]]
+                  (and (contains? all-module-param-long-opt-names
+                                  (name arg-key))
+                       (some? arg-val)))
                 options)]
-    (reduce (fn [acc [arg-key arg-val :as _option]]
-              (let [[_ module-name param-name]
-                    (re-matches #"(.*)\.([^.]+)$"
-                                (name arg-key))]
-                (assoc-in acc
-                          [(keyword module-name)
-                           (keyword param-name)]
-                          arg-val)))
-            {:services (:modules options)}
-            module-param-options)))
+    (as-> {:services (:modules options)}
+          system-config
+
+      (reduce (fn [acc {:keys [env-key module param]}]
+                (let [env-val (env env-key)]
+                  (cond-> acc
+                    (some? env-val)
+                    (assoc-in [(keyword module)
+                               (keyword param)]
+                              (read-string env-val)))))
+              system-config
+              env-key-module-params)
+
+      (reduce (fn [acc [arg-key arg-val :as _option]]
+                (let [[_ module param]
+                      (re-matches #"(.*)\.([^.]+)$"
+                                  (name arg-key))]
+                  (assoc-in acc
+                            [(keyword module)
+                             (keyword param)]
+                            arg-val)))
+              system-config
+              module-param-options))))
