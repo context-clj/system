@@ -27,7 +27,7 @@
             opt-name
             argument)))
 
-(defn env-name
+(defn env-var
   [module param]
   (let [module-part
         (-> module
@@ -55,20 +55,26 @@
     (keyword
      (str module-part "--" param-part))))
 
+(defn env-val
+  [type module param]
+  (let [env-key' (env-key module param)
+        env-val' (env env-key')
+        coercer  (get coercers type identity)]
+    (when (some? env-val')
+      (if (= type "string[]")
+        (try
+          (-> env-val' read-string vec)
+          (catch Exception _e
+            (coercer env-val')))
+        (coercer env-val')))))
+
 (defn opt-description
   [module param field-config]
-  (let [env-key (env-key module param)
-        env-val (env env-key)]
-    (prn-str
-     (assoc
-      (select-keys field-config
-                   [:type :default :required :sensitive])
-      :env {:env-var (env-name module param)
-            :env-val (try
-                       (when (some? env-val)
-                         (read-string env-val))
-                       (catch Exception _e
-                         env-val))}))))
+  (prn-str
+   {:spec (select-keys field-config
+                       [:type :default :required :sensitive])
+    :env {:env-var (env-var module param)
+          :env-val (env-val (:type field-config) module param)}}))
 
 (defn opt-validator
   ([type]
@@ -102,9 +108,13 @@
       (conj :validate validators)
 
       (some? default)
-      (conj :default default)
+      (conj :default default
+            :default-fn (fn [_options]
+                          (or (env-val type module param)
+                              default)))
 
-      (some? required)
+      (and (some? required)
+           (nil? (env-val type module param)))
       (conj :missing
             (str "Missing argument: "
                  "--"
@@ -199,15 +209,18 @@
                (-> manifest :config keys)]
            (long-opt-name module param)))
 
-        env-key-module-params
+        env-vals
         (for [[module manifest]
               manifests
 
-              param
-              (-> manifest :config keys)]
-          {:env-key (env-key module param)
-           :module  module
-           :param   param})
+              [param field-config]
+              (-> manifest :config)
+
+              :let  [env-val' (env-val (:type field-config) module param)]
+              :when (some? env-val')]
+          {:module  module
+           :param   param
+           :env-val env-val'})
 
         module-param-options
         (filter (fn [[arg-key arg-val :as _option]]
@@ -218,18 +231,13 @@
     (as-> {:services (:modules options)}
           system-config
 
-      (reduce (fn [acc {:keys [env-key module param]}]
-                (let [env-val (env env-key)]
-                  (try
-                    (cond-> acc
-                      (some? env-val)
-                      (assoc-in [(keyword module)
-                                 (keyword param)]
-                                (read-string env-val)))
-                    (catch Exception _
-                      acc))))
+      (reduce (fn [acc {:keys [env-val module param]}]
+                (assoc-in acc
+                          [(keyword module)
+                           (keyword param)]
+                          env-val))
               system-config
-              env-key-module-params)
+              env-vals)
 
       (reduce (fn [acc [arg-key arg-val :as _option]]
                 (let [[_ module param]

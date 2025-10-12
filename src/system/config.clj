@@ -33,7 +33,8 @@
     v
     (->> (str/split v #",")
          (mapv str/trim)
-         (remove str/blank?))))
+         (remove str/blank?)
+         (vec))))
 
 (defn coerce-boolean [v]
   (cond (boolean? v) v
