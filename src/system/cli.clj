@@ -21,6 +21,7 @@
   [module param]
   (let [opt-name (long-opt-name module param)
         argument (-> param
+                     (name)
                      (str/replace #"[-.]" "_")
                      (str/upper-case))]
     (format "--%s %s"
@@ -90,7 +91,6 @@
   [module param {param-type :type
                  default    :default
                  required   :required
-                 sensitive  :sensitive
                  validator  :validator
                  :as _field-config}]
   (let [validators (cond-> []
@@ -123,11 +123,7 @@
       (conj :missing
             (str "Missing argument: "
                  "--"
-                 (long-opt-name module param)))
-
-      ;; TODO: probably should remove this
-      (some? sensitive)
-      (identity))))
+                 (long-opt-name module param))))))
 
 (defn manifest->cli-opts
   [module manifest]
@@ -156,7 +152,7 @@
              (map #(str \" % \"))
              (str/join ", ")
              (str "Available modules: "))]
-    ["-m" "--modules MODULE" description
+    [nil "--modules MODULE" description
      :multi true
      :update-fn (fnil conj [])
      :missing "Must provide at least one module using --modules argument"

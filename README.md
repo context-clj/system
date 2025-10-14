@@ -43,13 +43,13 @@ Basic module may look like:
    :register-hook {:http/authorize {:fn #'autorize}}
    :config {:api-key {:type "string" :required true}}})
 
-(system/destart
+(system/defstart
    [context config]
    (system/info context ::start)
    (http/register-endpoint context {:method :get :path "/service" :fn #'service-function})
    {:connection (connect-to-api config)})
 
-(system/destop
+(system/defstop
    [context state]
    (when-let [conn (:connection state)]
      (.stop conn)))
