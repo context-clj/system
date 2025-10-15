@@ -94,7 +94,7 @@
                  validator  :validator
                  :as _field-config}]
   (let [validators (cond-> []
-                     (not= param-type "string[]")
+                     (some? param-type)
                      (conj (opt-validator param-type)
                            (str "Expected type: " param-type))
 
@@ -102,11 +102,7 @@
                      (conj (opt-validator param-type validator)
                            (str "Custom validator: " validator)))]
     (cond-> []
-      (= param-type "string[]")
-      (conj :update-fn (fnil conj [])
-            :multi true)
-
-      (not= param-type "string[]")
+      (some? param-type)
       (conj :parse-fn (get coercers param-type identity))
 
       (seq validators)
@@ -153,16 +149,28 @@
              (str/join ", ")
              (str "Available modules: "))]
     [nil "--modules MODULE" description
-     :multi true
-     :update-fn (fnil conj [])
-     :missing "Must provide at least one module using --modules argument"
-     :validate [(fn [arg]
-                  (->> all-module-names
-                       (filter #(= % arg))
-                       (seq)))
-                (fn [arg]
-                  (str "No module named \"" arg "\" found. "
-                       description))]]))
+     :parse-fn (get coercers "string[]")
+     :validate (let [missing-modules-fn
+                     (fn [modules]
+                       (reduce (fn [acc module]
+                                 (cond-> acc
+                                   (->> all-module-names
+                                        (filter #(= % module))
+                                        (empty?))
+                                   (conj module)))
+                               []
+                               modules))]
+                 [(fn [modules]
+                    (-> modules missing-modules-fn empty?))
+                  (fn [modules]
+                    (let [missing-modules (missing-modules-fn modules)]
+                      (str/join
+                       \newline
+                       (-> []
+                           (into (for [missing-module missing-modules]
+                                   (str "No module named \"" missing-module "\" found. ")))
+                           (conj (str \newline description))))))])
+     :missing "Must provide at least one module using --modules argument"]))
 
 (def cli-opts-default
   [["-h" "--help" "Display help"]])

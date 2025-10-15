@@ -1,7 +1,9 @@
 (ns system.config
-  (:require [clojure.string :as str]
-            [clojure.spec.alpha :as s]
-            [cheshire.core :as json]))
+  (:require
+   [cheshire.core :as json]
+   [clojure.edn :as edn]
+   [clojure.spec.alpha :as s]
+   [clojure.string :as str]))
 
 (s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean" "map"})
 (s/def ::default any?)
@@ -25,16 +27,25 @@
   (parse-int "44")
   (parse-int "44.4")
   (parse-int "a")
-  (parse-int "-1")
-  )
+  (parse-int "-1"))
 
 (defn coerce-vector-of-strings [v]
   (if-not (string? v)
     v
-    (->> (str/split v #",")
-         (mapv str/trim)
-         (remove str/blank?)
-         (vec))))
+    (let [vector-of-strings
+          (or (try
+                (->> v
+                     (edn/read-string)
+                     (map str)
+                     (vec))
+                (catch Exception _e
+                  nil))
+              (vec
+               (str/split v #",")))]
+      (->> vector-of-strings
+           (map str/trim)
+           (remove str/blank?)
+           (vec)))))
 
 (defn coerce-boolean [v]
   (cond (boolean? v) v
@@ -73,8 +84,7 @@
     (->> config'
          (reduce (fn [config [k v]]
                    (->> (if-let [sch (get schema k)] (coerce-value k v (:type sch)) v)
-                        (assoc config k))
-                   ) {}))))
+                        (assoc config k))) {}))))
 
 (defn validate-required [errors schema config]
   (->> schema
@@ -113,8 +123,8 @@
 
 (defn validate [schema config]
   (-> []
-       (validate-required schema config)
-       (validate-params schema config)))
+      (validate-required schema config)
+      (validate-params schema config)))
 
 (comment
 
@@ -139,6 +149,4 @@
   (validate sch {:port 5432 :pool-size 10
                  :host "localhost"
                  :password "pwd"
-                 :timeout 1000 :database "db"})
-
-  )
+                 :timeout 1000 :database "db"}))
