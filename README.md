@@ -134,8 +134,7 @@ You can either use a provided default runner or completely customize it for your
 
 ```shell
 clj -M -i src/my_app_core.clj -m system \
-    --modules <module-1> \
-    --modules <module-2> \
+    --modules '["<module-1>" "<module-2>"]' \
     --module-1.param-1 <param-1> \
     --module-2.param-2 <param-1>
 ```
@@ -153,16 +152,15 @@ clj -M -i src/my_app_core.clj -m system --help
 #
 # Usage:
 #   clj -M -i <path-to-main-module.clj> -m system
-#       --modules <module-1>
-#       --modules <module-2>
+#       --modules '["<module-1>" "<module-2>"]'
 #       --module-1.param-1 <param-1>
 #       --module-2.param-2 <param-2>
 #
 # Options:
-#   -m, --modules MODULE                Available modules: "module-a", "core"
-#       --core.param-1 :PARAM_1         {:type "string[]", :required true}
-#       --core.param-2 :PARAM_2  Hello  {:type "string", :default "Hello", :required true}
-#       --core.param-3 :PARAM_3         {:type "map", :required true}
+#       --modules MODULE                Available modules: "module-a", "core"
+#       --core.param-1 PARAM_1          {:type "string[]", :required true}
+#       --core.param-2 PARAM_2  Hello   {:type "string", :default "Hello", :required true}
+#       --core.param-3 PARAM_3          {:type "map", :required true}
 #   -h, --help                          Display help
 #
 # Please refer to context-clj README to override the default runner:
@@ -174,14 +172,47 @@ clj -M -i src/my_app_core.clj -m system --help
 1. `string[]`
 
     ```shell
-    clj -M -i src/my_app_core.clj -m system --core.param-1 1337 --core.param-1 foobar --core.param-1 "Hello World!"
+    # Option 1. Pass comma-separated values
+    clj -M -i src/my_app_core.clj -m system --core.param-1 "1337, foobar, Hello World"
+
+    # Option 2. Pass as an EDN vector. Note the quotes
+    clj -M -i src/my_app_core.clj -m system --core.param-1 '["1137" "foobar" "Hello World"]'
     ```
 
 2. `map`
 
     ```shell
+    # Pass as a JSON string
     clj -M -i src/my_app_core.clj -m system --core.param-3 '{"a": 42}'
     ```
+
+### Environment variables
+
+CLI parser looks for module params in environment variables as well.
+
+Environment variables should have a name formatted specific way: `MODULE__PARAM`
+
+| Module   | Param     | Argument             | Environment         |
+|----------|-----------|----------------------|---------------------|
+| core     | param-1   | --core.param-1       | CORE__PARAM_1       |
+| module-a | param-2   | --module-a.param-2   | MODULE_A__PARAM_2   |
+| module-b | param-3-4 | --module-b.param-3-4 | MODULE_B__PARAM_3_4 |
+
+CLI arguments have higher priority than environment variables,
+meaning that environment variables can be overridden by command-line arguments.
+
+You can always check what environment variable name corresponds to a command-line argument and see its current value using `--help` command.
+All information is available in the argument description column under `:env` key.
+
+```text
+Options:
+      --modules MODULE                   Available modules: "module-a", "core"
+      --module-a.param-1 PARAM_1         {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
+      --core.param-1 PARAM_1             {:spec {:type "string[]", :required true}, :env {:env-var "CORE__PARAM_1", :env-val ["World"]}}
+      --core.param-2 PARAM_2      Hello  {:spec {:type "string", :default "Hello", :required true}, :env {:env-var "CORE__PARAM_2", :env-val nil}}
+      --core.param-3 PARAM_3             {:spec {:type "map", :required true}, :env {:env-var "CORE__PARAM_3", :env-val nil}}
+      --core.param-4 PARAM_4      1      {:spec {:type "string[]", :default 1}, :env {:env-var "CORE__PARAM_4", :env-val ["Hello" "World" "!"]}}
+```
 
 ### How to override default runner and create a custom CLI
 
