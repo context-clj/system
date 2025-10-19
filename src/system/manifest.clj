@@ -31,6 +31,11 @@
                 {(-> ns ns-name keyword) @manifest-var})))
        (apply merge)))
 
+(defn unload-module [manifest]
+  (when-let [module-ns (-> manifest meta :ns)]
+    (doseq [[s _] (ns-map module-ns)]
+      (ns-unmap module-ns s))))
+
 (defn load-deps [deps]
   (loop [all-deps #{}
          [dep & remain-deps] deps]
@@ -66,8 +71,7 @@
                   :let [dep-ns (-> dep symbol find-ns)
                         manifest-var (some-> dep-ns find-manifest-var)]
                   :when manifest-var]
-            (ns-unmap dep-ns
-                      (-> manifest-var meta :name)))
+            (unload-module @manifest-var))
           all-deps)
 
         :else
