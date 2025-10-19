@@ -141,7 +141,9 @@
 (defn cli-opts-modules
   [manifests]
   (let [all-module-names
-        (map #(-> % first name) manifests)
+        (->> manifests
+             (map #(-> % first name))
+             (sort))
 
         description
         (->> all-module-names
