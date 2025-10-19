@@ -24,7 +24,28 @@
             (re-find #"Available modules:.*\n" summary)]
         (is
          (every? #(str/includes? available-modules-str %)
-                 ["module-a" "module-b" "module-c"])))))
+                 ["system.cli.test-modules.module-a"
+                  "system.cli.test-modules.module-b"
+                  "system.cli.test-modules.module-c"]))))
+
+    (testing "Additionally passing --modules arguments shows help only for those modules"
+      (let [modules
+            ["system.cli.test-modules.module-a"
+             "system.cli.test-modules.module-b"]
+
+            {:keys [summary]}
+            (sut/parse-args ["--modules" (pr-str modules) "--help"])
+
+            available-modules-str
+            (re-find #"Available modules:.*\n" summary)]
+        (println summary)
+        (is
+         (every? #(str/includes? available-modules-str %)
+                 modules))
+        (is
+         (not-any? #(str/includes? available-modules-str %)
+                   ["system.cli.test-modules.module-c"
+                    "system.cli.test-modules.module-d"])))))
 
   (testing "--modules"
     (testing "Running a system without --modules argument results in an error"
@@ -70,7 +91,7 @@
                 (sut/parse-args ["--modules" (pr-str modules)])]
             (is (empty? errors))))))
 
-    (testing "Module params"
+    (testing "Pass module params with --<module-name>.<param-name>"
       (testing "Must pass all required module params as command-line arguments"
         (let [modules
               ["system.cli.test-modules.module-c"
@@ -93,12 +114,17 @@
               (sut/parse-args ["--modules" (pr-str modules)])]
           (is (empty? errors)))))))
 
-#_(deftest test-cli-options->system-config
-    (testing "Can pass multiple modules. They will start in the passed order"
-      (let [modules
-            ["system.cli.test-modules.module-b"
-             "system.cli.test-modules.module-a"]
+(deftest test-cli-options->system-config
+  (testing "Can pass multiple modules. They will start in the passed order"
+    (let [modules
+          ["system.cli.test-modules.module-b"
+           "system.cli.test-modules.module-a"]
 
-            {:keys [errors]}
-            (sut/parse-args ["--modules" modules])]
-        (is (empty? errors)))))
+          {:keys [options errors]}
+          (sut/parse-args ["--modules" modules])]
+      (is (empty? errors))
+
+      (let [system-config (sut/options->system-config options)]
+        (is
+         (= modules
+            (:services system-config)))))))

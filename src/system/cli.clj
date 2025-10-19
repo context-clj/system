@@ -209,6 +209,7 @@
 
          {:keys [options] :as parsed-args}
          (parse-opts args cli-opts-with-all-modules)]
+     (println "(-> options :modules seq)" (-> options :modules seq))
      (if-let [selected-modules (-> options :modules seq)]
        (let [cli-opts-with-selected-modules-only
              (-> []
