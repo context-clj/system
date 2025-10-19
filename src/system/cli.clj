@@ -177,12 +177,20 @@
 (def cli-opts-default
   [["-h" "--help" "Display help"]])
 
-(defn cli-opts-from-manifests []
-  (let [manifests (find-manifests)]
-    (-> []
-        (conj (cli-opts-modules manifests))
-        (into (cli-opts-configs manifests)))))
+(defn cli-opts-from-manifests
+  ([]
+   (cli-opts-from-manifests []))
 
+  ([modules]
+   (let [manifests (cond->> (find-manifests)
+                     (seq modules)
+                     (filter (fn [[module _manifest]]
+                               (->> modules
+                                    (filter #(= (keyword %) module))
+                                    (first)))))]
+     (-> []
+         (conj (cli-opts-modules manifests))
+         (into (cli-opts-configs manifests))))))
 
 ;;;; ===============================================================================================
 ;;;; Public API functions
@@ -193,11 +201,22 @@
    (parse-args args []))
 
   ([args cli-opts-custom]
-   (let [cli-opts (-> []
-                      (into (cli-opts-from-manifests))
-                      (into cli-opts-custom)
-                      (into cli-opts-default))]
-     (parse-opts args cli-opts))))
+   (let [cli-opts-with-all-modules
+         (-> []
+             (into (cli-opts-from-manifests))
+             (into cli-opts-custom)
+             (into cli-opts-default))
+
+         {:keys [options] :as parsed-args}
+         (parse-opts args cli-opts-with-all-modules)]
+     (if-let [selected-modules (-> options :modules seq)]
+       (let [cli-opts-with-selected-modules-only
+             (-> []
+                 (into (cli-opts-from-manifests selected-modules))
+                 (into cli-opts-custom)
+                 (into cli-opts-default))]
+         (parse-opts args cli-opts-with-selected-modules-only))
+       parsed-args))))
 
 (defn error-msg [errors]
   (str "The following errors occurred while parsing command line arguments:\n\n"
