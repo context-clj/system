@@ -53,6 +53,23 @@
            (remove str/blank?)
            (vec)))))
 
+(defn coerce-map [v]
+  (cond
+    (string? v)
+    (or (try
+          (json/parse-string v keyword)
+          (catch Exception _e
+            nil))
+        (edn/read-string v))
+
+    (map? v)
+    v
+
+    :else
+    (throw
+     (ex-info "Expect map or json string"
+              {:value v}))))
+
 (defn coerce-boolean [v]
   (cond (boolean? v) v
         (= "true" v) true
@@ -65,9 +82,7 @@
    "keyword" keyword
    "boolean" coerce-boolean
    "string[]" coerce-vector-of-strings
-   "map" (fn [m] (cond (string? m) (json/parse-string m keyword)
-                       (map? m) m
-                       :else (throw (ex-info "Expect map or json string" {:value m}))))})
+   "map" coerce-map})
 
 (defn vector-of-strings? [v]
   (and (vector? v) (every? string? v)))
