@@ -23,6 +23,12 @@
     (Integer/parseInt s)
     s))
 
+(defn parse-num [s]
+  (try
+    (.parse (java.text.NumberFormat/getInstance) s)
+    (catch Exception _e
+      s)))
+
 (comment
   (parse-int "44")
   (parse-int "44.4")
@@ -55,6 +61,7 @@
 
 (def coercers
   {"integer" parse-int
+   "number" parse-num
    "keyword" keyword
    "boolean" coerce-boolean
    "string[]" coerce-vector-of-strings
