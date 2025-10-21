@@ -1,25 +1,7 @@
 (ns system.manifest
   (:require
    [clojure.set :as set]
-   [system.meta :refer [find-var-with-meta]]
-   [clojure.string :as str]))
-
-(defn- keyname [key]
-  (let [key-ns (namespace key)]
-    (if (str/blank? key-ns)
-      (name key)
-      (str (namespace key) "/" (name key)))))
-
-(defn- dep-ns [dep]
-  (cond-> dep
-    (keyword? dep)
-    (keyname)
-
-    :always
-    (str/replace #"/" ".")
-
-    :always
-    (str/replace #"_" "-")))
+   [system.meta :refer [find-var-with-meta]]))
 
 (defn find-manifest-var [ns]
   (find-var-with-meta ns :context-clj/manifest))
@@ -39,7 +21,7 @@
 (defn load-deps [deps]
   (loop [all-deps #{}
          [dep & remain-deps] deps]
-    (let [normalized-dep (some-> dep dep-ns)]
+    (let [normalized-dep (some-> dep name)]
       (cond
         (not normalized-dep)
         all-deps
@@ -63,7 +45,7 @@
 (defn unload-deps [deps]
   (loop [all-deps #{}
          [dep & remain-deps] deps]
-    (let [normalized-dep (some-> dep dep-ns)]
+    (let [normalized-dep (some-> dep name)]
       (cond
         (not normalized-dep)
         (do
