@@ -38,17 +38,18 @@
 (defn coerce-vector-of-strings [v]
   (if-not (string? v)
     v
-    (let [vector-of-strings
-          (or (try
-                (->> v
-                     (edn/read-string)
-                     (map str)
-                     (vec))
-                (catch Exception _e
-                  nil))
-              (vec
-               (str/split v #",")))]
-      (->> vector-of-strings
+    (let [strings
+          (or
+           (try
+             (let [obj (edn/read-string v)]
+               (when (sequential? obj)
+                 (->> (vec obj)
+                      (map str))))
+             (catch Exception _e
+               nil))
+
+           (str/split v #","))]
+      (->> strings
            (map str/trim)
            (remove str/blank?)
            (vec)))))
