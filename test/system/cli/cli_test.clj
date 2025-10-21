@@ -240,7 +240,8 @@
 
         (testing "map"
           (testing "Pass as a JSON object"
-            (doseq [expect [{:foo "bar" :3.14159 42}]
+            (doseq [expect [{:foo "bar" :3.14159 42}
+                            {}]
                     :let [{:keys [options errors]}
                           (sut/parse-args ["--modules"
                                            "system.cli.test-modules.module-a"
@@ -253,7 +254,8 @@
 
           (testing "Pass as an EDN map"
             (doseq [expect [{:foo  "bar" :3.14159  42}
-                            {"foo" "bar" "3.14159" 42}]
+                            {"foo" "bar" "3.14159" 42}
+                            {}]
                     :let [{:keys [options errors]}
                           (sut/parse-args ["--modules"
                                            "system.cli.test-modules.module-a"
@@ -262,7 +264,19 @@
                                            (pr-str expect)])]]
               (is (empty? errors))
               (let [actual (:system.cli.test-modules.module-a.param-7 options)]
-                (is (= expect actual))))))))))
+                (is (= expect actual)))))
+
+          (testing "Fails on invalid JSON and EDN"
+            (doseq [bad-value ["foobar" "123" "true" "{1: 2}" "{]"]
+                    :let [{:keys [errors]}
+                          (sut/parse-args ["--modules"
+                                           "system.cli.test-modules.module-a"
+
+                                           "--system.cli.test-modules.module-a.param-7"
+                                           bad-value])]]
+              (->> errors
+                   (filter #(str/includes? % "Expected type: map"))
+                   (seq)))))))))
 
 
 (deftest test-cli-options->system-config
