@@ -112,7 +112,96 @@
 
               {:keys [errors]}
               (sut/parse-args ["--modules" (pr-str modules)])]
-          (is (empty? errors)))))))
+          (is (empty? errors))))
+
+      (testing "Supported module param types"
+        (testing "string"
+          (doseq [expect ["foobar" "123" "true"]
+                  :let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-1"
+                                         expect])]]
+            (is (empty? errors))
+            (let [actual (:system.cli.test-modules.module-a.param-1 options)]
+              (is (= expect actual)))))
+
+        (testing "string[]"
+          (testing "Can pass as comma-separated values"
+            (let [expect
+                  ["foobar" "123" "true"]
+
+                  {:keys [options errors]}
+                  (sut/parse-args ["--modules"
+                                   "system.cli.test-modules.module-a"
+
+                                   "--system.cli.test-modules.module-a.param-2"
+                                   (str/join "," expect)])]
+              (is (empty? errors))
+              (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                (is (= expect actual)))))
+
+          (testing "Can pass as an EDN vector"
+            (let [expect
+                  ["foobar" "123" "true"]
+
+                  {:keys [options errors]}
+                  (sut/parse-args ["--modules"
+                                   "system.cli.test-modules.module-a"
+
+                                   "--system.cli.test-modules.module-a.param-2"
+                                   (pr-str expect)])]
+              (is (empty? errors))
+              (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                (is (= expect actual))))))
+
+        (testing "integer"
+          (doseq [expect [-1 0 1]
+                  :let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-3"
+                                         (str expect)])]]
+            (is (empty? errors))
+            (let [actual (:system.cli.test-modules.module-a.param-3 options)]
+              (is (= expect actual))))
+
+          (doseq [bad-value ["foobar" "true"]
+                  :let [{:keys [errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-3"
+                                         bad-value])]]
+            (->> errors
+                 (filter #(str/includes? % "Expected type: integer"))
+                 (seq))))
+
+        (testing "number"
+          (doseq [expect [3.14159 -1 0 1]
+                  :let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-4"
+                                         (str expect)])]]
+            (is (empty? errors))
+            (let [actual (:system.cli.test-modules.module-a.param-4 options)]
+              (is (= expect actual))))
+
+          (doseq [bad-value ["foobar" "true"]
+                  :let [{:keys [errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-4"
+                                         bad-value])]]
+            (->> errors
+                 (filter #(str/includes? % "Expected type: number"))
+                 (seq))))))))
+
 
 (deftest test-cli-options->system-config
   (testing "Can pass multiple modules. They will start in the passed order"
