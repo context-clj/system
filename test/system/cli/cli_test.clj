@@ -1,5 +1,6 @@
 (ns system.cli.cli-test
   (:require
+   [cheshire.core :as json]
    [clojure.string :as str]
    [clojure.test :refer [deftest is join-fixtures testing use-fixtures]]
    [helpers :refer [unload-all-modules-fixture]]
@@ -200,7 +201,68 @@
                                          bad-value])]]
             (->> errors
                  (filter #(str/includes? % "Expected type: number"))
-                 (seq))))))))
+                 (seq))))
+
+        (testing "keyword"
+          (doseq [expect [:foo :bar :foobar]
+                  :let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-5"
+                                         (name expect)])]]
+            (is (empty? errors))
+            (let [actual (:system.cli.test-modules.module-a.param-5 options)]
+              (is (= expect actual)))))
+
+        (testing "boolean"
+          (doseq [expect [true false]
+                  :let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-6"
+                                         (str expect)])]]
+            (is (empty? errors))
+            (let [actual (:system.cli.test-modules.module-a.param-6 options)]
+              (is (= expect actual))))
+
+          (doseq [bad-value [3.14159 1 "foo"]
+                  :let [{:keys [errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"
+
+                                         "--system.cli.test-modules.module-a.param-6"
+                                         (str bad-value)])]]
+            (->> errors
+                 (filter #(str/includes? % "Expected type: boolean"))
+                 (seq))))
+
+        (testing "map"
+          (testing "Pass as a JSON object"
+            (doseq [expect [{:foo "bar" :3.14159 42}]
+                    :let [{:keys [options errors]}
+                          (sut/parse-args ["--modules"
+                                           "system.cli.test-modules.module-a"
+
+                                           "--system.cli.test-modules.module-a.param-7"
+                                           (json/generate-string expect)])]]
+              (is (empty? errors))
+              (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                (is (= expect actual)))))
+
+          (testing "Pass as an EDN map"
+            (doseq [expect [{:foo  "bar" :3.14159  42}
+                            {"foo" "bar" "3.14159" 42}]
+                    :let [{:keys [options errors]}
+                          (sut/parse-args ["--modules"
+                                           "system.cli.test-modules.module-a"
+
+                                           "--system.cli.test-modules.module-a.param-7"
+                                           (pr-str expect)])]]
+              (is (empty? errors))
+              (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                (is (= expect actual))))))))))
 
 
 (deftest test-cli-options->system-config

@@ -8,7 +8,10 @@
               :config {:param-1 {:type "string"}
                        :param-2 {:type "string[]"}
                        :param-3 {:type "integer"}
-                       :param-4 {:type "number"}}})
+                       :param-4 {:type "number"}
+                       :param-5 {:type "keyword"}
+                       :param-6 {:type "boolean"}
+                       :param-7 {:type "map"}}})
 
 #_{:clj-kondo/ignore [:unresolved-symbol]}
 (defstart
