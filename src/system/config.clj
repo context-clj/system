@@ -57,11 +57,18 @@
 (defn coerce-map [v]
   (cond
     (string? v)
-    (or (try
-          (json/parse-string v keyword)
-          (catch Exception _e
-            nil))
-        (edn/read-string v))
+    (or
+     (try
+       (let [obj (edn/read-string v)]
+         (when (map? obj)
+           obj))
+       (catch Exception _e
+         nil))
+
+     (try
+       (json/parse-string v keyword)
+       (catch Exception _e
+         nil)))
 
     (map? v)
     v
