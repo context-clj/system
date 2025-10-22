@@ -11,7 +11,8 @@
                        :param-4 {:type "number"}
                        :param-5 {:type "keyword"}
                        :param-6 {:type "boolean"}
-                       :param-7 {:type "map"}}})
+                       :param-7 {:type "map"}
+                       :param-8 {:type "string" :default "0xDEADBEEF"}}})
 
 #_{:clj-kondo/ignore [:unresolved-symbol]}
 (defstart

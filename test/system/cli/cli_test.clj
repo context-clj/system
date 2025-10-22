@@ -300,7 +300,52 @@
                                            bad-value])]]
               (->> errors
                    (filter #(str/includes? % "Expected type: map"))
-                   (seq)))))))))
+                   (seq))))))
+
+      (testing "Param source priorities"
+        (testing "default value has the lowest priority"
+          (testing "Used only if there is no corresponding env variable set or CLI argument passed"
+            (let [{:keys [options errors]}
+                  (sut/parse-args ["--modules"
+                                   "system.cli.test-modules.module-a"])]
+              (is (empty? errors))
+              (let [actual (:system.cli.test-modules.module-a.param-8 options)]
+                (is (= "0xDEADBEEF" actual))))))
+
+        (testing "env variable has the second priority"
+          (testing "Overrides default value"
+            (let [expect "0xDEFEC8ED"]
+              (with-env [:system.cli.test-modules.module-a.param-8 expect]
+                (let [{:keys [options errors]}
+                      (sut/parse-args ["--modules"
+                                       "system.cli.test-modules.module-a"])]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-8 options)]
+                    (is (= expect actual))))))))
+
+        (testing "CLI argument has the highest priority"
+          (let [expect "0x0000000FF1CE"]
+            (testing "Overrides default value"
+              (let [{:keys [options errors]}
+                    (sut/parse-args ["--modules"
+                                     "system.cli.test-modules.module-a"
+
+                                     "--system.cli.test-modules.module-a.param-8"
+                                     expect])]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-8 options)]
+                  (is (= expect actual)))))
+            (testing "Overrides env variable"
+              (with-env [:system.cli.test-modules.module-a.param-8 "0xDEFEC8ED"]
+                (let [{:keys [options errors]}
+                      (sut/parse-args ["--modules"
+                                       "system.cli.test-modules.module-a"
+
+                                       "--system.cli.test-modules.module-a.param-8"
+                                       expect])]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-8 options)]
+                    (is (= expect actual))))))))))))
 
 
 (deftest test-cli-options->system-config
