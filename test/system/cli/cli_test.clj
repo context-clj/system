@@ -3,8 +3,9 @@
    [cheshire.core :as json]
    [clojure.string :as str]
    [clojure.test :refer [deftest is join-fixtures testing use-fixtures]]
+   [environ.core :refer [env]]
    [helpers :refer [unload-all-modules-fixture]]
-   [system.cli :as sut]))
+   [system.cli :as sut :refer [env-var]]))
 
 (defn- simulate-cli-run-fixture [f]
   ;; Simulate loading "main" module
@@ -14,6 +15,16 @@
 
 (use-fixtures :each (join-fixtures [unload-all-modules-fixture
                                     simulate-cli-run-fixture]))
+
+(defmacro with-env ^:private
+  [[param value] & body]
+  `(let [environ-key# (-> (env-var ~param)
+                          (str/lower-case)
+                          (str/replace "_" "-")
+                          (str/replace "." "-")
+                          (keyword))]
+     (with-redefs [env {environ-key# ~value}]
+       ~@body)))
 
 (deftest test-cli-parse-args
   (testing "--help"
@@ -117,16 +128,29 @@
 
       (testing "Supported module param types"
         (testing "string"
-          (doseq [expect ["foobar" "123" "true"]
-                  :let [{:keys [options errors]}
-                        (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
+          (let [expects ["foobar" "123" "true"]]
+            (testing "CLI"
+              (doseq [expect expects
+                      :let [{:keys [options errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
 
-                                         "--system.cli.test-modules.module-a.param-1"
-                                         expect])]]
-            (is (empty? errors))
-            (let [actual (:system.cli.test-modules.module-a.param-1 options)]
-              (is (= expect actual)))))
+                                             "--system.cli.test-modules.module-a.param-1"
+                                             expect])]]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-1 options)]
+                  (is (= expect actual)))))
+
+            (testing "ENV"
+              (doseq [expect expects]
+                (with-env [:system.cli.test-modules.module-a.param-1 expect]
+                  (println env)
+                  (let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-1 options)]
+                      (is (= expect actual)))))))))
 
         (testing "string[]"
           (testing "Can pass as comma-separated values"
