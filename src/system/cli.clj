@@ -28,19 +28,26 @@
             opt-name
             argument)))
 
-(defn env-var
-  [module param]
-  (let [module-part
-        (-> module
-            (->str)
-            (str/replace #"[-.]" "_"))
 
-        param-part
-        (-> param
-            (->str)
-            (str/replace #"[-.]" "_"))]
-    (str/upper-case
-     (str module-part "__" param-part))))
+(defn env-var
+  ([module-param]
+   (let [[module param]
+         (-> (name module-param)
+             (str/split #"\.(?=[^.]+$)"))]
+     (env-var module param)))
+
+  ([module param]
+   (let [module-part
+         (-> module
+             (->str)
+             (str/replace #"[-.]" "_"))
+
+         param-part
+         (-> param
+             (->str)
+             (str/replace #"[-.]" "_"))]
+     (str/upper-case
+      (str module-part "__" param-part)))))
 
 (defn env-key
   [module param]
@@ -61,13 +68,7 @@
   (let [env-key' (env-key module param)
         env-val' (env env-key')
         coercer  (get coercers param-type identity)]
-    (when (some? env-val')
-      (if (= param-type "string[]")
-        (try
-          (-> env-val' read-string vec)
-          (catch Exception _e
-            (coercer env-val')))
-        (coercer env-val')))))
+    (some-> env-val' coercer)))
 
 (defn opt-description
   [module param field-config]
@@ -93,14 +94,18 @@
                  required   :required
                  validator  :validator
                  :as _field-config}]
-  (let [validators (cond-> []
-                     (some? param-type)
-                     (conj (opt-validator param-type)
-                           (str "Expected type: " param-type))
+  (let [validators
+        (cond-> []
+          (some? param-type)
+          (conj (opt-validator param-type)
+                (str "Expected type: " param-type))
 
-                     (some? validator)
-                     (conj (opt-validator param-type validator)
-                           (str "Custom validator: " validator)))]
+          (some? validator)
+          (conj (opt-validator param-type validator)
+                (str "Custom validator: " validator)))
+
+        env-val'
+        (env-val param-type module param)]
     (cond-> []
       (some? param-type)
       (conj :parse-fn (get coercers param-type identity))
@@ -109,10 +114,20 @@
       (conj :validate validators)
 
       (some? default)
-      (conj :default default
-            :default-fn (fn [_options]
-                          (or (env-val param-type module param)
-                              default)))
+      (conj :default default)
+
+      ;; Prioritize ENV value over default
+      ;;
+      ;; Priorities: "default" < "env" < "CLI argument"
+      ;;   - default
+      ;;     has the lowest priority and can be overridden by env or CLI argument
+      ;;   - env
+      ;;     has the second priority and can override default but be overridden by CLI argument
+      ;;   - CLI argument
+      ;;     has the highest priority and cannot be overridden by anything else
+      (some? env-val')
+      (conj :default-fn (fn [_options]
+                          (or env-val' default)))
 
       (and (some? required)
            (nil? (env-val param-type module param)))
