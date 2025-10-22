@@ -23,8 +23,8 @@
                           (str/replace "_" "-")
                           (str/replace "." "-")
                           (keyword))]
-     (with-redefs [env {environ-key# ~value}]
-       ~@body)))
+     (with-redefs [env (assoc env environ-key# ~value)]
+       (do ~@body))))
 
 (deftest test-cli-parse-args
   (testing "--help"
