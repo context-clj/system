@@ -154,153 +154,289 @@
 
         (testing "string[]"
           (testing "Can pass as comma-separated values"
-            (let [expect
-                  ["foobar" "123" "true"]
+            (let [expect ["foobar" "123" "true"]]
+              (testing "CLI"
+                (let [{:keys [options errors]}
+                      (sut/parse-args ["--modules"
+                                       "system.cli.test-modules.module-a"
 
-                  {:keys [options errors]}
-                  (sut/parse-args ["--modules"
-                                   "system.cli.test-modules.module-a"
+                                       "--system.cli.test-modules.module-a.param-2"
+                                       (str/join "," expect)])]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                    (is (= expect actual)))))
 
-                                   "--system.cli.test-modules.module-a.param-2"
-                                   (str/join "," expect)])]
-              (is (empty? errors))
-              (let [actual (:system.cli.test-modules.module-a.param-2 options)]
-                (is (= expect actual)))))
+              (testing "ENV"
+                (with-env [:system.cli.test-modules.module-a.param-2 (str/join "," expect)]
+                  (let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                      (is (= expect actual))))))))
 
           (testing "Can pass as an EDN vector"
-            (let [expect
-                  ["foobar" "123" "true"]
+            (let [expect ["foobar" "123" "true"]]
+              (testing "CLI"
+                (let [{:keys [options errors]}
+                      (sut/parse-args ["--modules"
+                                       "system.cli.test-modules.module-a"
 
-                  {:keys [options errors]}
-                  (sut/parse-args ["--modules"
-                                   "system.cli.test-modules.module-a"
+                                       "--system.cli.test-modules.module-a.param-2"
+                                       (pr-str expect)])]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                    (is (= expect actual)))))
 
-                                   "--system.cli.test-modules.module-a.param-2"
-                                   (pr-str expect)])]
-              (is (empty? errors))
-              (let [actual (:system.cli.test-modules.module-a.param-2 options)]
-                (is (= expect actual))))))
+              (testing "ENV"
+                (with-env [:system.cli.test-modules.module-a.param-2 (pr-str expect)]
+                  (let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-2 options)]
+                      (is (= expect actual)))))))))
 
         (testing "integer"
-          (doseq [expect [-1 0 1]
-                  :let [{:keys [options errors]}
+          (let [expects    [-1 0 1]
+                bad-values ["foobar" "true"]]
+            (testing "CLI"
+              (doseq [expect expects
+                      :let [{:keys [options errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-3"
+                                             (str expect)])]]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-3 options)]
+                  (is (= expect actual))))
+
+              (doseq [bad-value bad-values
+                      :let [{:keys [errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-3"
+                                             bad-value])]]
+                (->> errors
+                     (filter #(str/includes? % "Expected type: integer"))
+                     (seq))))
+
+            (testing "ENV"
+              (doseq [expect expects]
+                (with-env [:system.cli.test-modules.module-a.param-3 (str expect)]
+                  (let [{:keys [options errors]}
                         (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-3 options)]
+                      (is (= expect actual))))))
 
-                                         "--system.cli.test-modules.module-a.param-3"
-                                         (str expect)])]]
-            (is (empty? errors))
-            (let [actual (:system.cli.test-modules.module-a.param-3 options)]
-              (is (= expect actual))))
-
-          (doseq [bad-value ["foobar" "true"]
-                  :let [{:keys [errors]}
+              (doseq [bad-value bad-values]
+                (with-env [:system.cli.test-modules.module-a.param-3 (str bad-value)]
+                  (let [{:keys [errors]}
                         (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
-
-                                         "--system.cli.test-modules.module-a.param-3"
-                                         bad-value])]]
-            (->> errors
-                 (filter #(str/includes? % "Expected type: integer"))
-                 (seq))))
+                                         "system.cli.test-modules.module-a"])]
+                    (->> errors
+                         (filter #(str/includes? % "Expected type: integer"))
+                         (seq))))))))
 
         (testing "number"
-          (doseq [expect [3.14159 -1 0 1]
-                  :let [{:keys [options errors]}
+          (let [expects    [3.14159 -1 0 1]
+                bad-values ["foobar" "true"]]
+            (testing "CLI"
+              (doseq [expect expects
+                      :let [{:keys [options errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-4"
+                                             (str expect)])]]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-4 options)]
+                  (is (= expect actual))))
+
+              (doseq [bad-value bad-values
+                      :let [{:keys [errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-4"
+                                             bad-value])]]
+                (->> errors
+                     (filter #(str/includes? % "Expected type: number"))
+                     (seq))))
+
+            (testing "ENV"
+              (doseq [expect expects]
+                (with-env [:system.cli.test-modules.module-a.param-4 (str expect)]
+                  (let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-4 options)]
+                      (is (= expect actual))))))
+
+              (doseq [bad-value bad-values]
+                (with-env [:system.cli.test-modules.module-a.param-4 (str bad-value)]
+                  (let [{:keys [errors]}
                         (sut/parse-args ["--modules"
                                          "system.cli.test-modules.module-a"
 
                                          "--system.cli.test-modules.module-a.param-4"
-                                         (str expect)])]]
-            (is (empty? errors))
-            (let [actual (:system.cli.test-modules.module-a.param-4 options)]
-              (is (= expect actual))))
-
-          (doseq [bad-value ["foobar" "true"]
-                  :let [{:keys [errors]}
-                        (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
-
-                                         "--system.cli.test-modules.module-a.param-4"
-                                         bad-value])]]
-            (->> errors
-                 (filter #(str/includes? % "Expected type: number"))
-                 (seq))))
+                                         bad-value])]
+                    (->> errors
+                         (filter #(str/includes? % "Expected type: number"))
+                         (seq))))))))
 
         (testing "keyword"
-          (doseq [expect [:foo :bar :foobar]
-                  :let [{:keys [options errors]}
-                        (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
+          (let [expects [:foo :bar :foobar]]
+            (testing "CLI"
+              (doseq [expect expects
+                      :let [{:keys [options errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
 
-                                         "--system.cli.test-modules.module-a.param-5"
-                                         (name expect)])]]
-            (is (empty? errors))
-            (let [actual (:system.cli.test-modules.module-a.param-5 options)]
-              (is (= expect actual)))))
+                                             "--system.cli.test-modules.module-a.param-5"
+                                             (name expect)])]]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-5 options)]
+                  (is (= expect actual)))))
+
+            (testing "ENV"
+              (doseq [expect expects]
+                (with-env [:system.cli.test-modules.module-a.param-5 (name expect)]
+                  (let [{:keys [options errors]}
+                        (sut/parse-args ["--modules"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-5 options)]
+                      (is (= expect actual)))))))))
 
         (testing "boolean"
-          (doseq [expect [true false]
-                  :let [{:keys [options errors]}
+          (let [expects    [true false]
+                bad-values [3.14159 1 "foo"]]
+            (testing "CLI"
+              (doseq [expect expects
+                      :let [{:keys [options errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-6"
+                                             (str expect)])]]
+                (is (empty? errors))
+                (let [actual (:system.cli.test-modules.module-a.param-6 options)]
+                  (is (= expect actual))))
+
+              (doseq [bad-value bad-values
+                      :let [{:keys [errors]}
+                            (sut/parse-args ["--modules"
+                                             "system.cli.test-modules.module-a"
+
+                                             "--system.cli.test-modules.module-a.param-6"
+                                             (str bad-value)])]]
+                (->> errors
+                     (filter #(str/includes? % "Expected type: boolean"))
+                     (seq))))
+
+            (testing "ENV"
+              (doseq [expect expects]
+                (with-env [:system.cli.test-modules.module-a.param-6 (str expect)]
+                  (let [{:keys [options errors]}
                         (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
+                                         "system.cli.test-modules.module-a"])]
+                    (is (empty? errors))
+                    (let [actual (:system.cli.test-modules.module-a.param-6 options)]
+                      (is (= expect actual))))))
 
-                                         "--system.cli.test-modules.module-a.param-6"
-                                         (str expect)])]]
-            (is (empty? errors))
-            (let [actual (:system.cli.test-modules.module-a.param-6 options)]
-              (is (= expect actual))))
-
-          (doseq [bad-value [3.14159 1 "foo"]
-                  :let [{:keys [errors]}
+              (doseq [bad-value bad-values]
+                (with-env [:system.cli.test-modules.module-a.param-6 (str bad-value)]
+                  (let [{:keys [errors]}
                         (sut/parse-args ["--modules"
-                                         "system.cli.test-modules.module-a"
-
-                                         "--system.cli.test-modules.module-a.param-6"
-                                         (str bad-value)])]]
-            (->> errors
-                 (filter #(str/includes? % "Expected type: boolean"))
-                 (seq))))
+                                         "system.cli.test-modules.module-a"])]
+                    (->> errors
+                         (filter #(str/includes? % "Expected type: boolean"))
+                         (seq))))))))
 
         (testing "map"
           (testing "Pass as a JSON object"
-            (doseq [expect [{:foo "bar" :3.14159 42}
-                            {}]
-                    :let [{:keys [options errors]}
-                          (sut/parse-args ["--modules"
-                                           "system.cli.test-modules.module-a"
+            (let [expects [{:foo "bar" :3.14159 42}
+                           {}]]
+              (testing "CLI"
+                (doseq [expect expects
+                        :let [{:keys [options errors]}
+                              (sut/parse-args ["--modules"
+                                               "system.cli.test-modules.module-a"
 
-                                           "--system.cli.test-modules.module-a.param-7"
-                                           (json/generate-string expect)])]]
-              (is (empty? errors))
-              (let [actual (:system.cli.test-modules.module-a.param-7 options)]
-                (is (= expect actual)))))
+                                               "--system.cli.test-modules.module-a.param-7"
+                                               (json/generate-string expect)])]]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                    (is (= expect actual)))))
+
+              (testing "ENV"
+                (doseq [expect expects]
+                  (with-env [:system.cli.test-modules.module-a.param-7 (json/generate-string expect)]
+                    (let [{:keys [options errors]}
+                          (sut/parse-args ["--modules"
+                                           "system.cli.test-modules.module-a"])]
+                      (is (empty? errors))
+                      (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                        (is (= expect actual)))))))))
 
           (testing "Pass as an EDN map"
-            (doseq [expect [{:foo  "bar" :3.14159  42}
-                            {"foo" "bar" "3.14159" 42}
-                            {}]
-                    :let [{:keys [options errors]}
-                          (sut/parse-args ["--modules"
-                                           "system.cli.test-modules.module-a"
+            (let [expects [{:foo  "bar" :3.14159  42}
+                           {"foo" "bar" "3.14159" 42}
+                           {}]]
+              (testing "CLI"
+                (doseq [expect expects
+                        :let [{:keys [options errors]}
+                              (sut/parse-args ["--modules"
+                                               "system.cli.test-modules.module-a"
 
-                                           "--system.cli.test-modules.module-a.param-7"
-                                           (pr-str expect)])]]
-              (is (empty? errors))
-              (let [actual (:system.cli.test-modules.module-a.param-7 options)]
-                (is (= expect actual)))))
+                                               "--system.cli.test-modules.module-a.param-7"
+                                               (pr-str expect)])]]
+                  (is (empty? errors))
+                  (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                    (is (= expect actual)))))
+
+              (testing "ENV"
+                (doseq [expect expects]
+                  (with-env [:system.cli.test-modules.module-a.param-7 (pr-str expect)]
+                    (let [{:keys [options errors]}
+                          (sut/parse-args ["--modules"
+                                           "system.cli.test-modules.module-a"])]
+                      (is (empty? errors))
+                      (let [actual (:system.cli.test-modules.module-a.param-7 options)]
+                        (is (= expect actual)))))))))
 
           (testing "Fails on invalid JSON and EDN"
-            (doseq [bad-value ["foobar" "123" "true" "{1: 2}" "{]"]
-                    :let [{:keys [errors]}
+            (let [bad-values ["foobar" "123" "true" "{1: 2}" "{]"]]
+              (testing "CLI"
+                (doseq [bad-value bad-values
+                        :let [{:keys [errors]}
+                              (sut/parse-args ["--modules"
+                                               "system.cli.test-modules.module-a"
+
+                                               "--system.cli.test-modules.module-a.param-7"
+                                               bad-value])]]
+                  (->> errors
+                       (filter #(str/includes? % "Expected type: map"))
+                       (seq))))
+
+              (testing "ENV"
+                (doseq [bad-value bad-values]
+                  (with-env [:system.cli.test-modules.module-a.param-7 bad-value]
+                    (let [{:keys [errors]}
                           (sut/parse-args ["--modules"
                                            "system.cli.test-modules.module-a"
 
                                            "--system.cli.test-modules.module-a.param-7"
-                                           bad-value])]]
-              (->> errors
-                   (filter #(str/includes? % "Expected type: map"))
-                   (seq))))))
+                                           bad-value])]
+                      (->> errors
+                           (filter #(str/includes? % "Expected type: map"))
+                           (seq))))))))))
 
       (testing "Param source priorities"
         (testing "default value has the lowest priority"
