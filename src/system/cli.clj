@@ -28,7 +28,6 @@
             opt-name
             argument)))
 
-
 (defn env-var
   ([module-param]
    (let [[module param]
@@ -127,7 +126,7 @@
       ;;     has the highest priority and cannot be overridden by anything else
       (some? env-val')
       (conj :default-fn (fn [_options]
-                          (or env-val' default)))
+                          env-val'))
 
       (and (some? required)
            (nil? (env-val param-type module param)))
