@@ -141,6 +141,16 @@ clj -M -i src/my_app_core.clj -m system \
 
 `-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` that has some sort of an entry point).
 
+### How does CLI discover your app's modules
+
+1. It starts with `clj -M -i src/my_app_core.clj` part of the command. It loads your "main" module.
+2. If "main" module's manifest has `:deps`, then system loads their manifest too, including there deps. This is a recursive process.
+3. Modules that can were discovered during this recursive loading process are called "reachable". CLI acknowledges their existence and display info on them.
+4. Modules that were not discovered are call "unreachable" and you cannot interact with them via CLI.
+   You can make them reachable if you insert them into the module discovering process:
+    1. Make it a starting module `-i src/my_another_module.clj`
+    2. Add them as a dependency to one of your "reachable" modules
+
 ### Help command
 
 There is a nice `--help` flag that shows what modules your app has and prints info on module params:
@@ -157,17 +167,41 @@ clj -M -i src/my_app_core.clj -m system --help
 #       --module-2.param-2 <param-2>
 #
 # Options:
-#       --modules MODULE                Available modules: "module-a", "core"
-#       --core.param-1 PARAM_1          {:type "string[]", :required true}
-#       --core.param-2 PARAM_2  Hello   {:type "string", :default "Hello", :required true}
-#       --core.param-3 PARAM_3          {:type "map", :required true}
-#   -h, --help                          Display help
+#       --modules MODULE                   Available modules: "core", "module-a"
+#       --core.param-1 PARAM_1             {:spec {:type "string[]", :required true}, :env {:env-var "CORE__PARAM_1", :env-val nil}}
+#       --core.param-2 PARAM_2      Hello  {:spec {:type "string", :default "Hello", :required true}, :env {:env-var "CORE__PARAM_2", :env-val nil}}
+#       --core.param-3 PARAM_3             {:spec {:type "map", :required true}, :env {:env-var "CORE__PARAM_3", :env-val nil}}
+#       --core.param-4 PARAM_4      1      {:spec {:type "string[]", :default 1}, :env {:env-var "CORE__PARAM_4", :env-val nil}}
+#       --module-a.param-1 PARAM_1         {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
+#   -h, --help                             Display help
 #
 # Please refer to context-clj README to override the default runner:
 # https://github.com/context-clj/system/blob/main/README.md
 ```
 
-### Passing system config params of various types
+You can also display help only for selected modules by providing `--modules` additionally to `--help`:
+
+```shell
+clj -M -i src/my_app_core.clj -m system --modules module-a --help
+
+# Default context-clj system runner
+#
+# Usage:
+#   clj -M -i <path-to-main-module.clj> -m system
+#       --modules '["<module-1>" "<module-2>"]'
+#       --module-1.param-1 <param-1>
+#       --module-2.param-2 <param-2>
+#
+# Options:
+#       --modules MODULE            Available modules: "module-a"
+#       --module-a.param-1 PARAM_1  {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
+#   -h, --help                      Display help
+#
+# Please refer to context-clj README to override the default runner:
+# https://github.com/context-clj/system/blob/main/README.md
+```
+
+### Passing system config params of complex types
 
 1. `string[]`
 
@@ -175,22 +209,25 @@ clj -M -i src/my_app_core.clj -m system --help
     # Option 1. Pass comma-separated values
     clj -M -i src/my_app_core.clj -m system --core.param-1 "1337, foobar, Hello World"
 
-    # Option 2. Pass as an EDN vector. Note the quotes
-    clj -M -i src/my_app_core.clj -m system --core.param-1 '["1137" "foobar" "Hello World"]'
+    # Option 2. Pass as an EDN vector. It is recommended to wrap the vector in single-quotes
+    clj -M -i src/my_app_core.clj -m system --core.param-1 '["1337" "foobar" "Hello World"]'
     ```
 
 2. `map`
 
     ```shell
-    # Pass as a JSON string
-    clj -M -i src/my_app_core.clj -m system --core.param-3 '{"a": 42}'
+    # Option 1. Pass as a JSON string
+    clj -M -i src/my_app_core.clj -m system --core.param-3 '{"a": 42, "b": true, "c": "foobar"}'
+
+    # Option 2. Pass as an EDN map. It is recommended to wrap the map in single-quotes
+    clj -M -i src/my_app_core.clj -m system --core.param-1 '{:a 42, :b true, :c "foobar"}'
     ```
 
 ### Environment variables
 
-CLI parser looks for module params in environment variables as well.
+CLI parser looks for module params in environment variables.
 
-Environment variables should have a name formatted specific way: `MODULE__PARAM`
+Environment variables should have a name formatted in a specific way: `MODULE__PARAM_NAME`
 
 | Module   | Param     | Argument             | Environment         |
 |----------|-----------|----------------------|---------------------|
@@ -206,24 +243,25 @@ All information is available in the argument description column under `:env` key
 
 ```text
 Options:
-      --modules MODULE                   Available modules: "module-a", "core"
-      --module-a.param-1 PARAM_1         {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
+      --modules MODULE                   Available modules: "core", "module-a"
       --core.param-1 PARAM_1             {:spec {:type "string[]", :required true}, :env {:env-var "CORE__PARAM_1", :env-val ["World"]}}
       --core.param-2 PARAM_2      Hello  {:spec {:type "string", :default "Hello", :required true}, :env {:env-var "CORE__PARAM_2", :env-val nil}}
       --core.param-3 PARAM_3             {:spec {:type "map", :required true}, :env {:env-var "CORE__PARAM_3", :env-val nil}}
       --core.param-4 PARAM_4      1      {:spec {:type "string[]", :default 1}, :env {:env-var "CORE__PARAM_4", :env-val ["Hello" "World" "!"]}}
+      --module-a.param-1 PARAM_1         {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
 ```
 
 ### How to override default runner and create a custom CLI
 
-We provide a bunch of simple functions as an API that allows you to change CLI behavior completely:
+Most of the time default runner should be sufficient, however if you feel the need to add custom logic to the
+CLI parsing, we provide a bunch of simple functions as an API that allows you to change CLI behavior completely:
 
 1. `system.cli/parse-args`
 2. `system.cli/error-msg`
 3. `system.cli/exit`
 4. `system.cli/options->system-config`
 
-You can take the default runner's code as a template to create a custom CLI in your app code:
+You can take the default runner's code as a template to create a custom CLI in your app's code:
 
 ```clojure
 (defn -main [& args]
