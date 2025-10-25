@@ -147,6 +147,7 @@
 (defn cli-opts-configs
   [manifests]
   (->> manifests
+       (sort-by key)
        (filter #(-> % second :config))
        (map (fn [[module manifest]] (manifest->cli-opts module manifest)))
        (apply concat)
@@ -223,7 +224,6 @@
 
          {:keys [options] :as parsed-args}
          (parse-opts args cli-opts-with-all-modules)]
-     (println "(-> options :modules seq)" (-> options :modules seq))
      (if-let [selected-modules (-> options :modules seq)]
        (let [cli-opts-with-selected-modules-only
              (-> []
