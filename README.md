@@ -128,32 +128,32 @@ there could be several implementations
 ## Command-line interface
 
 context-clj allows you to configure and start your app using CLI.
-You can either use a provided default runner or completely customize it for your own needs.
+You can either use the provided default runner or completely customize it for your own needs.
 
-### How to run your app with a default runner
+### How to run your app with the default runner
 
 ```shell
 clj -M -i src/my_app_core.clj -m system \
     --modules '["<module-1>" "<module-2>"]' \
     --module-1.param-1 <param-1> \
-    --module-2.param-2 <param-1>
+    --module-2.param-2 <param-2>
 ```
 
-`-i <filepath>` is used to provide your app's file that has a `defmanifest` for a main module (usually it is `core.clj` that has some sort of an entry point).
+The `-i <filepath>` flag is used to load your app's file that contains a `defmanifest` for a main module (usually `core.clj` with an entry point).
 
-### How does CLI discover your app's modules
+### How the CLI discovers your app's modules
 
-1. It starts with `clj -M -i src/my_app_core.clj` part of the command. It loads your "main" module.
-2. If "main" module's manifest has `:deps`, then system loads their manifest too, including there deps. This is a recursive process.
-3. Modules that can were discovered during this recursive loading process are called "reachable". CLI acknowledges their existence and display info on them.
-4. Modules that were not discovered are call "unreachable" and you cannot interact with them via CLI.
-   You can make them reachable if you insert them into the module discovering process:
-    1. Make it a starting module `-i src/my_another_module.clj`
-    2. Add them as a dependency to one of your "reachable" modules
+1. It starts with the `clj -M -i src/my_app_core.clj` part of the command, which loads your "main" module.
+2. If the "main" module's manifest has `:deps`, the system loads their manifests too, including their deps. This is a recursive process.
+3. Modules that were discovered during this recursive loading process are called "reachable". The CLI acknowledges their existence and displays info on them.
+4. Modules that were not discovered are called "unreachable" and you cannot interact with them via CLI.
+   You can make them reachable by inserting them into the module discovery process:
+    1. Make it a starting module: `-i src/my_another_module.clj`
+    2. Add it as a dependency to one of your "reachable" modules
 
 ### Help command
 
-There is a nice `--help` flag that shows what modules your app has and prints info on module params:
+Use the `--help` flag to see what modules your app has and display info on module params:
 
 ```shell
 clj -M -i src/my_app_core.clj -m system --help
@@ -225,9 +225,9 @@ clj -M -i src/my_app_core.clj -m system --modules module-a --help
 
 ### Environment variables
 
-CLI parser looks for module params in environment variables.
+The CLI parser automatically looks for module params in environment variables.
 
-Environment variables should have a name formatted in a specific way: `MODULE__PARAM_NAME`
+Environment variables should follow this naming convention: `MODULE__PARAM_NAME`
 
 | Module   | Param     | Argument             | Environment         |
 |----------|-----------|----------------------|---------------------|
@@ -235,11 +235,11 @@ Environment variables should have a name formatted in a specific way: `MODULE__P
 | module-a | param-2   | --module-a.param-2   | MODULE_A__PARAM_2   |
 | module-b | param-3-4 | --module-b.param-3-4 | MODULE_B__PARAM_3_4 |
 
-CLI arguments have higher priority than environment variables,
-meaning that environment variables can be overridden by command-line arguments.
+**Priority:** CLI arguments have higher priority than environment variables,
+meaning that command-line arguments will override environment variables.
 
-You can always check what environment variable name corresponds to a command-line argument and see its current value using `--help` command.
-All information is available in the argument description column under `:env` key.
+You can always check what environment variable name corresponds to a command-line argument and see its current value using the `--help` command.
+All information is available in the argument description column under the `:env` key.
 
 ```text
 Options:
@@ -251,17 +251,17 @@ Options:
       --module-a.param-1 PARAM_1         {:spec {:type "integer"}, :env {:env-var "MODULE_A__PARAM_1", :env-val nil}}
 ```
 
-### How to override default runner and create a custom CLI
+### How to override the default runner and create a custom CLI
 
-Most of the time default runner should be sufficient, however if you feel the need to add custom logic to the
-CLI parsing, we provide a bunch of simple functions as an API that allows you to change CLI behavior completely:
+Most of the time the default runner should be sufficient. However, if you need to add custom logic to the
+CLI parsing, we provide a set of functions as an API that allows you to customize CLI behavior completely:
 
 1. `system.cli/parse-args`
 2. `system.cli/error-msg`
 3. `system.cli/exit`
 4. `system.cli/options->system-config`
 
-You can take the default runner's code as a template to create a custom CLI in your app's code:
+You can use the default runner's code as a template to create a custom CLI in your app:
 
 ```clojure
 (defn -main [& args]
