@@ -264,7 +264,7 @@ Environment variables follow this pattern: `MODULE__PARAM_NAME`
 | `http`     | `port`      | `--http.port`              | `HTTP__PORT`              |
 | `http`     | `ssl-cert`  | `--http.ssl-cert`          | `HTTP__SSL_CERT`          |
 
-#### Parameter source priority
+#### Parameter priority
 
 When the same parameter is specified in multiple places, the CLI uses this priority order (highest to lowest):
 
