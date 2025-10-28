@@ -1,10 +1,13 @@
 (ns system-test
-  (:require [clojure.test :refer [deftest testing is]]
-            [matcho.core :as matcho]
-            [clojure.spec.alpha :as s]
-            [system]
-            [system.config :as config]
-            [clojure.string :as str]))
+  (:require
+   [clojure.set :as set]
+   [clojure.spec.alpha :as s]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [matcho.core :as matcho]
+   [system]
+   [system.config :as config]
+   [system.manifest :refer [find-manifest-var find-manifests]]))
 
 (s/def ::resourceType string?)
 (s/def ::resource-map (s/keys :req-un [::resourceType]))
@@ -30,7 +33,7 @@
 
   )
 
-(def system-test-stop? (atom nil))
+(defonce system-test-stop? (atom nil))
 
 (system/defstart
   [context config]
@@ -62,7 +65,7 @@
 
   (matcho/match
    (system/get-system-state context [:config])
-   {:param "param"})
+    {:param "param"})
 
   (testing "system state after start"
     (matcho/match (system/get-system-state context [:state]) :v1))
@@ -89,9 +92,7 @@
   (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
   (system/get-context-cache ctx-with-cache [:cached] (fn [] (swap! num-cache-calls inc) :ok))
 
-  (matcho/match @num-cache-calls 1)
-
-  )
+  (matcho/match @num-cache-calls 1))
 
 (defn process-middlewares [context request]
   (let [context (system/reduce-hooks-into-context context ::middleware request)]
@@ -140,9 +141,7 @@
   (def s-ctx' (system/start-system {:services ["system-test" "module-a"]
                                     :system-test {:param "param"}}))
 
-  (matcho/match (save s-ctx' {}) {:id "id" :ts "ts"})
-
-  )
+  (matcho/match (save s-ctx' {}) {:id "id" :ts "ts"}))
 
 (deftest test-hooks
   (ensure-system-test-defined)
@@ -153,15 +152,13 @@
   (testing "hook call"
     (matcho/match
      (create context {:resourceType "Patient"})
-     {:status :error, :errors [{:message "id is required"}]})
+      {:status :error, :errors [{:message "id is required"}]})
 
     (matcho/match
      (create context {:resourceType "Patient" :id "pt-1"})
-     {:status :ok, :resource {:resourceType "Patient", :id "pt-1"}}))
-
+      {:status :ok, :resource {:resourceType "Patient", :id "pt-1"}}))
 
   (testing "hook-reduce-context"
-
     (def ctx'' (process-middlewares context {:get "/user"}))
     (matcho/match (get-user ctx'') nil?)
     (matcho/match (get-client ctx'') nil?)
@@ -173,18 +170,13 @@
 
     (matcho/match
      (system/get-hooks context ::middleware)
-     {::mw1 {:fn #'system-test/set-user}
-      ::mw2 {:fn #'system-test/set-client}})
+      {::mw1 {:fn #'system-test/set-user}
+       ::mw2 {:fn #'system-test/set-client}})
 
     (def ctx' (process-middlewares context {:get "/user"}))
 
     (matcho/match (get-user ctx')   {:id "admin"})
-    (matcho/match (get-client ctx') {:id "client"})
-
-
-    )
-
-  )
+    (matcho/match (get-client ctx') {:id "client"})))
 
 (deftest test-defmanifest
   (testing "when validator is an atom"
@@ -212,7 +204,7 @@
          #"Invalid manifest"
          (system/defmanifest {:config "invalid"}))
         "Non-conforming config must throw"))
-  
+
   (testing "type validation"
     (doseq [type ["integer" "number" "keyword" "string" "string[]" "boolean" "map"]]
       (is (system/defmanifest {:config {:my-field {:type type}}})
@@ -222,27 +214,64 @@
          clojure.lang.ExceptionInfo
          #"Invalid manifest"
          (system/defmanifest {:config {:field-of-unsupported-type {:type "foobar"}}}))
-        "Unsupported field type must throw")))
+        "Unsupported field type must throw"))
+
+  (testing "defmanifest creates a var with unique name and special meta both in the var and the object"
+    (let [test-ns (find-ns 'system-test)]
+      (let [_ (system/defmanifest {})
+            manifest-var (find-manifest-var test-ns)]
+        (is (str/starts-with? (-> manifest-var meta :name) "context-clj-manifest"))
+        (is (contains? (meta @manifest-var) :context-clj/manifest)))))
+
+  (testing "calling defmanifest again replaces old manifest (reloads module)"
+    (let [test-ns (find-ns 'system-test)
+          _ (system/defmanifest {:description "module-description-1"})
+          old-manifest-var (find-manifest-var test-ns)
+          _ (system/defmanifest {:description "module-description-2"})
+          new-manifest-var (find-manifest-var test-ns)]
+      (is (not= old-manifest-var new-manifest-var))
+      (is (not= @old-manifest-var @new-manifest-var))
+      (is (= "module-description-1" (:description @old-manifest-var)))
+      (is (= "module-description-2" (:description @new-manifest-var)))
+      (is (->> (-> test-ns ns-map vals)
+               (some #(= % old-manifest-var))
+               (not)))))
+
+  (testing "loads dependencies eagerly"
+    (let [dep :module-circular-a
+          _ (system/defmanifest {:deps [dep]})]
+      (is (some-> dep symbol find-ns find-manifest-var some?))))
+
+  (testing "handles circular dependencies"
+    (let [_ (system/defmanifest {:deps [:module-circular-a :module-circular-b]})]
+      (is (some-> :module-circular-a symbol find-ns find-manifest-var some?))
+      (is (some-> :module-circular-b symbol find-ns find-manifest-var some?)))))
 
 (deftest test-start-system
   (testing "config value validation"
-    (system/defmanifest {:config {:number-field {:type "number"}}})
-    (is (thrown-with-msg?
-         Exception
-         #"Invalid config"
-         (system/start-system {:services [:system-test]
-                               :system-test {:number-field "not a number"}}))
-        "A field value of wrong type must throw")
+    (binding [*ns* (find-ns 'system-test)]
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:number-field {:type "number"}}})
+        (is (thrown-with-msg?
+             Exception
+             #"Invalid config"
+             (system/start-system {:services [module-name]
+                                   module-name {:number-field "not a number"}}))
+            "A field value of wrong type must throw")))
 
-    (system/defmanifest {:config {:port {:type "integer"}}})
-    (is (system/start-system {:services [:system-test]
-                              :system-test {:port 1234}})
-        "Unexpected error when validating port")
-    
-    (system/defmanifest {:config {:data {:type "map"}}})
-    (is (system/start-system {:services [:system-test]
-                              :system-test {:data {:a 1 :b "c"}}})
-        "Unexpected error when validating data")))
+    (binding [*ns* (find-ns 'system-test)]
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:port {:type "integer"}}})
+        (is (system/start-system {:services [module-name]
+                                  module-name {:port 1234}})
+            "Unexpected error when validating port")))
+
+    (binding [*ns* (find-ns 'system-test)]
+      (let [module-name (-> *ns* str keyword)]
+        (system/defmanifest {:config {:data {:type "map"}}})
+        (is (system/start-system {:services [module-name]
+                                  module-name {:data {:a 1 :b "c"}}})
+            "Unexpected error when validating data")))))
 
 (deftest test-coerce
   (is (= {:port 123}
@@ -261,34 +290,49 @@
 
 (deftest test-logging
   (ensure-system-test-defined)
-  (let [context (system/start-system
-                 {:services ["system-test"]
-                  :system-test {:param ""}})]
-    (testing "default log level (:info) produces output for both :info and :error log levels"
-      (let [output (with-out-str
-                     (system/error context "Hello from ERROR level"))]
-        (is (str/includes? output "Hello from ERROR level")))
+    (let [context (system/start-system
+                   {:services ["system-test"]
+                    :system-test {:param ""}})]
+      (testing "default log level (:info) produces output for both :info and :error log levels"
+        (let [output (with-out-str
+                       (system/error context "Hello from ERROR level"))]
+          (is (str/includes? output "Hello from ERROR level")))
 
-      (let [output (with-out-str
-                     (system/info context "Hello from INFO level"))]
-        (is (str/includes? output "Hello from INFO level"))))
+        (let [output (with-out-str
+                       (system/info context "Hello from INFO level"))]
+          (is (str/includes? output "Hello from INFO level"))))
 
-    (testing "default log level (:info) produces no output for :debug level"
-      (let [output (with-out-str
-                     (system/debug context "Hello from INFO level"))]
-        (is (empty? output))))
+      (testing "default log level (:info) produces no output for :debug level"
+        (let [output (with-out-str
+                       (system/debug context "Hello from INFO level"))]
+          (is (empty? output))))
 
-    (testing ":off log level disables logging completely"
-      (let [context-without-logs (system/ctx-set-log-level context :off)
-            output (with-out-str
-                     (system/error context-without-logs "Hello from ERROR level")
-                     (system/info  context-without-logs "Hello from INFO level")
-                     (system/debug context-without-logs "Hello from DEBUG level"))]
-        (is (empty? output)))))
+      (testing ":off log level disables logging completely"
+        (let [context-without-logs (system/ctx-set-log-level context :off)
+              output (with-out-str
+                       (system/error context-without-logs "Hello from ERROR level")
+                       (system/info  context-without-logs "Hello from INFO level")
+                       (system/debug context-without-logs "Hello from DEBUG level"))]
+          (is (empty? output)))))
 
-  (let [context (system/start-system
-                 {:services ["system-test"]
-                  :system-test {:param ""}
-                  :system/log-level (system/log-levels :off)})]
-    (is (= :off
-           (system/ctx-get-log-level context)))))
+    (let [context (system/start-system
+                   {:services ["system-test"]
+                    :system-test {:param ""}
+                    :system/log-level (system/log-levels :off)})]
+      (is (= :off
+             (system/ctx-get-log-level context)))))
+
+(deftest test-find-manifest-var
+  (let [test-ns (find-ns 'system-test)]
+    (system/defmanifest {})
+    (let [manifest-var (find-manifest-var test-ns)]
+      (is (some? manifest-var))
+      (is (= (-> manifest-var meta :ns)
+             test-ns)))))
+
+(deftest test-find-manifests
+  (system/defmanifest {:deps [:module-a :module-circular-a :module-circular-b]})
+  (let [actual-modules (-> (find-manifests) keys set)
+        expect-modules #{:system-test :module-a :module-circular-a :module-circular-b}]
+    (is (= expect-modules
+           (set/intersection actual-modules expect-modules)))))

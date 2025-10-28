@@ -1,7 +1,12 @@
 (ns system
-  (:require [system.config]
-            [clojure.string :as str]
-            [clojure.spec.alpha :as s]))
+  (:require
+   [clojure.pprint :as pp]
+   [clojure.spec.alpha :as s]
+   [clojure.string :as str]
+   [system.cli :as cli]
+   [system.config]
+   [system.manifest :refer [find-manifest-var load-deps unload-deps]]
+   [system.meta :refer [find-var-with-meta]]))
 ;; TODO: rewrite start with context
 
 
@@ -40,13 +45,27 @@
 (s/def ::manifest (s/keys :opt-un [::config ::description]))
 
 (defmacro defmanifest [manifest]
-  `(let [result# (s/conform ~::manifest ~manifest)]
-     (if (= :clojure.spec.alpha/invalid result#)
-       (throw (ex-info "Invalid manifest"
-                       (s/explain-data ~::manifest ~manifest)))
-       (def ~(symbol "manifest") result#))))
+  `(do
+     (let [context-clj-ns-helper-sym# (gensym "context-clj-ns-helper")]
+       (def context-clj-ns-helper-sym# nil)
+       (let [context-clj-ns# (-> context-clj-ns-helper-sym# var meta :ns)]
+         (when-let [manifest-var# (find-manifest-var context-clj-ns#)]
+           (when-let [deps# (-> manifest-var# var-get :deps seq)]
+             (unload-deps deps#))
+           (ns-unmap context-clj-ns# (-> manifest-var# meta :name)))
 
-(defn- new-system [ & [config]]
+         (let [result# (s/conform ~::manifest ~manifest)]
+           (if (= :clojure.spec.alpha/invalid result#)
+             (throw (ex-info "Invalid manifest"
+                             (s/explain-data ~::manifest ~manifest)))
+             (let [manifest-var# (intern context-clj-ns#
+                                         (gensym "context-clj-manifest-")
+                                         (with-meta result# {:context-clj/manifest true}))]
+               (when-let [deps# (-> result# :deps seq)]
+                 (load-deps deps#))
+               manifest-var#)))))))
+
+(defn- new-system [& [config]]
   {:system (atom {:system/config (or config {})})
    :cache (atom {})})
 
@@ -137,13 +156,18 @@
          (when (map? state#) (merge-system-state ~ctx [] state#))
          (info ~ctx ::start-module ~(name key))))))
 
-(defmacro defstart [params & body]
-  (assert (= 2 (count params)))
-  (let [fn-name 'start]
-    `(defn ~fn-name ~params
-       (let [b# (do ~@body)]
-         (when-not (or (map? b#) (nil? b#)) (throw (Exception. (str "start body should return config map, but got " (type b#)))))
-         (start-service ~(first params) b#)))))
+(defmacro defstart [[ctx cfg] & body]
+  `(intern *ns*
+           (symbol "start")
+           (with-meta
+             (fn [~ctx ~cfg]
+               (let [b# (do ~@body)]
+                 (if-not (or (map? b#) (nil? b#))
+                   (throw
+                    (ex-info (str "start body should return config map, but got " (type b#))
+                             {:return b#}))
+                   (system/start-service ~ctx b#))))
+             {:context-clj/defstart true})))
 
 (defmacro stop-service [ctx & body]
   (let [key (.getName *ns*)]
@@ -152,11 +176,13 @@
        (swap! (:system ~ctx) update :services (fn [x#] (when x# (disj x# '~key))))
        (clear-system-state ~ctx []))))
 
-(defmacro defstop [params & body]
-  (assert (= 2 (count params)))
-  (let [fn-name 'stop]
-    `(defn ~fn-name ~params
-       (stop-service ~(first params) ~@body))))
+(defmacro defstop [[ctx state] & body]
+  `(intern *ns*
+           (symbol "stop")
+           (with-meta
+             (fn [~ctx ~state]
+               (stop-service ~ctx ~@body))
+             {:context-clj/defstop true})))
 
 (defn ctx-get [ctx path]
   (get-in ctx path))
@@ -215,7 +241,7 @@
           coerced-config (system.config/coerce schema module-config)
           errors         (system.config/validate schema coerced-config)]
       (if (seq errors)
-        (do (error context ::invalid-config (str svs ": " (str/join ", " errors)) )
+        (do (error context ::invalid-config (str svs ": " (str/join ", " errors)))
             (set-system-state context [:errors module-key] errors))
         (do (info context ::valid-config svs)
             (set-system-state context [:configs module-key] coerced-config))))))
@@ -238,10 +264,10 @@
 
 (defn read-manifests [context {services :services :as config}]
   (doseq [svs services]
-    (require (symbol svs))
+    (require (symbol svs) :reload)
     (info context ::load svs)
-    (if-let [manifest (resolve (symbol (name svs) "manifest"))]
-      (let [manifest (var-get manifest)]
+    (if-let [manifest (some-> svs name symbol find-ns find-manifest-var var-get)]
+      (do
         (info context ::manifest svs)
         (set-system-state context [:manifests (keyword svs)] manifest)
         (register-hooks-from-manifest context manifest)
@@ -249,22 +275,32 @@
         (configs-from-manifest context manifest svs config))
       (throw (Exception. (str "No module " svs))))))
 
+(defn- find-stop-fn-var [ns]
+  (find-var-with-meta ns :context-clj/defstop))
+
 (defn stop-system [ctx]
   (let [system @(:system ctx)]
     (doseq [sv (:services system)]
       (require [sv])
-      (when-let [stop-fn (resolve (symbol (name sv) "stop"))]
-        (info ctx :stoping sv)
-        (stop-fn ctx (get system (keyword (name sv))))
-        (info ctx :stopped sv)))))
+      (let [sv-ns (-> sv name symbol find-ns)]
+        (when-let [stop-fn (some-> sv-ns find-stop-fn-var var-get)]
+          (binding [*ns* sv-ns]
+            (info ctx :stoping sv)
+            (stop-fn ctx (get system (keyword (name sv))))
+            (info ctx :stopped sv)))))))
 
-(defn start-services [context {services :services :as config}]
+(defn- find-start-fn-var [ns]
+  (find-var-with-meta ns :context-clj/defstart))
+
+(defn start-services [context {services :services :as _config}]
   (try
     (doseq [svs services]
-      (if-let [start-fn (resolve (symbol (name svs) "start"))]
-        (let [module-config (get-system-state context [:configs (keyword svs)])]
-          (start-fn context module-config))
-        (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs))))))
+      (let [svs-ns (-> svs name symbol find-ns)]
+        (if-let [start-fn (some-> svs-ns find-start-fn-var var-get)]
+          (let [module-config (get-system-state context [:configs (keyword svs)])]
+            (binding [*ns* svs-ns]
+              (start-fn context module-config)))
+          (swap! (:system context) update :services (fn [x#] (conj (or x# #{}) (symbol svs)))))))
     (catch Throwable t
       (stop-system context)
       (throw (.fillInStackTrace t)))))
@@ -284,6 +320,38 @@
            (throw e)))
     context))
 
+(defn- usage [options-summary]
+  (->> ["Default context-clj system runner"
+        ""
+        "Usage:"
+        "  clj -M -i <path-to-main-module.clj> -m system"
+        "      --modules '[\"<module-1>\" \"<module-2>\"]'"
+        "      --module-1.param-1 <param-1>"
+        "      --module-2.param-2 <param-2>"
+        ""
+        "Options:"
+        options-summary
+        ""
+        "Please refer to context-clj README to override the default runner:"
+        "https://github.com/context-clj/system/blob/main/README.md"]
+       (str/join \newline)))
+
+(defn -main [& args]
+  (let [{:keys [options errors summary]}
+        (cli/parse-args args)]
+    (cond
+      (:help options)
+      (cli/exit 0 (usage summary))
+
+      errors
+      (cli/exit 1 (cli/error-msg errors))
+
+      :else
+      (let [system-config (cli/options->system-config options)]
+        (println "\nStarting system with config:")
+        (pp/pprint system-config)
+        (println)
+        (start-system system-config)))))
 
 ;; helper macro for tests
 (defmacro ensure-context [cfg]
@@ -298,16 +366,9 @@
      (defn ~'ensure-context []
        (when-not @~'context-atom
          (def ~'context (system/start-system ~cfg))
-         (reset! ~'context-atom ~'context)
-         ))))
+         (reset! ~'context-atom ~'context)))))
 
 (def cfg {:host "localhost" :port  5401 :database "context_pg" :user "admin" :password "admin"})
-
-
-(comment
-
-
-  )
 
 ;; TODO: add context cache set-context-cache, update-context-cache, get-context-cache and clear-context-cache
 ;; TODO: think about name convention like module-<module-name>.clj
@@ -317,4 +378,3 @@
 ;; TODO: open telemetry out of the box
 ;; on module registration it register all config params
 ;; this params are used to validate before start
-

@@ -1,7 +1,9 @@
 (ns system.config
-  (:require [clojure.string :as str]
-            [clojure.spec.alpha :as s]
-            [cheshire.core :as json]))
+  (:require
+   [cheshire.core :as json]
+   [clojure.edn :as edn]
+   [clojure.spec.alpha :as s]
+   [clojure.string :as str]))
 
 (s/def ::type #{"string" "string[]" "integer" "number" "keyword" "boolean" "map"})
 (s/def ::default any?)
@@ -21,19 +23,60 @@
     (Integer/parseInt s)
     s))
 
+(defn parse-num [s]
+  (try
+    (.parse (java.text.NumberFormat/getInstance) s)
+    (catch Exception _e
+      s)))
+
 (comment
   (parse-int "44")
   (parse-int "44.4")
   (parse-int "a")
-  (parse-int "-1")
-  )
+  (parse-int "-1"))
 
 (defn coerce-vector-of-strings [v]
   (if-not (string? v)
     v
-    (->> (str/split v #",")
-         (mapv str/trim)
-         (remove str/blank?))))
+    (let [strings
+          (or
+           (try
+             (let [obj (edn/read-string v)]
+               (when (sequential? obj)
+                 (->> (vec obj)
+                      (map str))))
+             (catch Exception _e
+               nil))
+
+           (str/split v #","))]
+      (->> strings
+           (map str/trim)
+           (remove str/blank?)
+           (vec)))))
+
+(defn coerce-map [v]
+  (cond
+    (string? v)
+    (or
+     (try
+       (let [obj (edn/read-string v)]
+         (when (map? obj)
+           obj))
+       (catch Exception _e
+         nil))
+
+     (try
+       (json/parse-string v keyword)
+       (catch Exception _e
+         nil)))
+
+    (map? v)
+    v
+
+    :else
+    (throw
+     (ex-info "Expect map or json string"
+              {:value v}))))
 
 (defn coerce-boolean [v]
   (cond (boolean? v) v
@@ -43,12 +86,11 @@
 
 (def coercers
   {"integer" parse-int
+   "number" parse-num
    "keyword" keyword
    "boolean" coerce-boolean
    "string[]" coerce-vector-of-strings
-   "map" (fn [m] (cond (string? m) (json/parse-string m keyword)
-                       (map? m) m
-                       :else (throw (ex-info "Expect map or json string" {:value m}))))})
+   "map" coerce-map})
 
 (defn vector-of-strings? [v]
   (and (vector? v) (every? string? v)))
@@ -72,8 +114,7 @@
     (->> config'
          (reduce (fn [config [k v]]
                    (->> (if-let [sch (get schema k)] (coerce-value k v (:type sch)) v)
-                        (assoc config k))
-                   ) {}))))
+                        (assoc config k))) {}))))
 
 (defn validate-required [errors schema config]
   (->> schema
@@ -112,8 +153,8 @@
 
 (defn validate [schema config]
   (-> []
-       (validate-required schema config)
-       (validate-params schema config)))
+      (validate-required schema config)
+      (validate-params schema config)))
 
 (comment
 
@@ -138,7 +179,4 @@
   (validate sch {:port 5432 :pool-size 10
                  :host "localhost"
                  :password "pwd"
-                 :timeout 1000 :database "db"})
-
-  )
-
+                 :timeout 1000 :database "db"}))

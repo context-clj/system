@@ -13,11 +13,12 @@
   (system/info context ::stop))
 
 (deftest start-stop-test
-  (system/defmanifest {:config {}})
+  (binding [*ns* (find-ns 'only-stop-test)]
+    (system/defmanifest {:config {}})
 
-  (def context (system/start-system
-                {:services ["only-stop-test"]}))
+    (def context (system/start-system
+                  {:services ["only-stop-test"]}))
 
-  (is (= false @system-test-stoped?))
-  (system/stop-system context)
-  (is (= true @system-test-stoped?)))
+    (is (= false @system-test-stoped?))
+    (system/stop-system context)
+    (is (= true @system-test-stoped?))))
